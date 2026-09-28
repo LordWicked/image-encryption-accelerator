@@ -1,14 +1,16 @@
-# Editor e Compilador
+# Editor and build files
+.metals/
+.vscode/
 .idea/
 .bsp/
 target/
 project/target/
 *.iml
 
-# Simulador ChiselTest
+# Chisel tests
 test_run_dir/
 
-# Outputs de imagem gerados (para não encher o histórico do Git)
+# Output images
 hardware_image.png
 imagem_saida.png
 resultado_hardware.png
