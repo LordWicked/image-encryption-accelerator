@@ -7,6 +7,7 @@
 target/
 project/target/
 *.iml
+.DS_Store
 
 # Chisel tests
 test_run_dir/
