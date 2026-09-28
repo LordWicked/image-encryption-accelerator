@@ -1,0 +1,14 @@
+# Editor e Compilador
+.idea/
+.bsp/
+target/
+project/target/
+*.iml
+
+# Simulador ChiselTest
+test_run_dir/
+
+# Outputs de imagem gerados (para não encher o histórico do Git)
+hardware_image.png
+imagem_saida.png
+resultado_hardware.png
