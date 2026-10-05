@@ -33,7 +33,7 @@ class ImagePipelineSpec extends AnyFlatSpec with ChiselScalatestTester {
         inPixels += gray
       }
 
-      // 3 strem to hardware and collect output
+      // 3. stream to hardware and collect output
       val outPixels = ArrayBuffer[Int]()
 
       // tell the dut that the test environment is always ready to receive data
