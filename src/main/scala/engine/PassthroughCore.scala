@@ -6,7 +6,9 @@ import chisel3.util._
 // stream interface (issue #7)
 class StreamIO extends Bundle {
   // input pixel stream
-  val in = Flipped(Decoupled(UInt(8.W)))    //flipped so it inverts the direction (it is an input)
+  val in = Flipped(
+    Decoupled(UInt(8.W))
+  ) // flipped so it inverts the direction (it is an input)
 
   // output pixel stream
   val out = Decoupled(UInt(8.W))
@@ -19,4 +21,10 @@ class PassthroughCore extends Module {
   // just wire everything directly
   // this connects bits valid and ready automatically
   io.out <> io.in
+}
+trait HasStreamIO extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(Decoupled(UInt(8.W)))
+    val out = Decoupled(UInt(8.W))
+  })
 }
