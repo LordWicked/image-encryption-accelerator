@@ -12,11 +12,16 @@ import java.awt.Color
 class ImagePipelineSpec extends AnyFlatSpec with ChiselScalatestTester {
   "PassThroughEngine" should "process a custom real image pixel by pixel" in {
     test(new PassthroughCore) { dut =>
-
       // 1. load custom image 64x64 or 128x128 for faster simulation time
 
-      val inputFile = new File("128x128-pixel-art.jpg")       //chose the name of the image (has to be in the directory)
-      assert(inputFile.exists(), "Error: Please place an image named 'minha_foto.png' in the root folder.")
+      val inputFile =
+        new File(
+          "./assets/128x128-pixel-art.jpg"
+        ) // chose the name of the image (has to be in the directory)
+      assert(
+        inputFile.exists(),
+        "Error: Please place an image named 'minha_foto.png' in the root folder."
+      )
       val img = ImageIO.read(inputFile)
 
       val width = img.getWidth
@@ -29,7 +34,8 @@ class ImagePipelineSpec extends AnyFlatSpec with ChiselScalatestTester {
       for (y <- 0 until height; x <- 0 until width) {
         val color = new Color(img.getRGB(x, y))
         // Standard luminance formula (weighted average of RGB)
-        val gray = (color.getRed * 0.299 + color.getGreen * 0.587 + color.getBlue * 0.114).toInt
+        val gray =
+          (color.getRed * 0.299 + color.getGreen * 0.587 + color.getBlue * 0.114).toInt
         inPixels += gray
       }
 
@@ -55,7 +61,8 @@ class ImagePipelineSpec extends AnyFlatSpec with ChiselScalatestTester {
 
       // 4. RECONSTRUCT OUTPUT IMAGE
       // Create a new grayscale canvas and inject the hardware-processed pixels
-      val outImg = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY)
+      val outImg =
+        new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY)
       var i = 0
       for (y <- 0 until height; x <- 0 until width) {
         // Convert the single 8-bit value back to an RGB int for saving
@@ -68,7 +75,10 @@ class ImagePipelineSpec extends AnyFlatSpec with ChiselScalatestTester {
       ImageIO.write(outImg, "png", new File("hardware_image.png"))
 
       // 5. VALIDATE SUCCESS
-      assert(inPixels == outPixels, "Hardware output did not match input pixels!")
+      assert(
+        inPixels == outPixels,
+        "Hardware output did not match input pixels!"
+      )
     }
   }
 }
