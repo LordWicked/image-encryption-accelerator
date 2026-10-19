@@ -1,28 +1,46 @@
-# 128x128 8-bit grayscale PNG <-> raw binary 
 import sys
 from PIL import Image
-W = H = 128
 
-def png_to_bin(png, binf):
-    im = Image.open(png)
-    if im.size != (W, H):
-        raise ValueError("expected %dx%d, got %s" % (W, H, im.size))
+W = H = 64
+# Images have a fixed size (for now) and are converted to grayscale for simplicity.
+def png_to_bin(src_path, bin_path):
+
+    im = Image.open(src_path)
+
     if im.mode != "L":
-        raise ValueError("expected 8-bit grayscale (mode L), got mode %s" % im.mode)
+        im = im.convert("L")
+
+    if im.size != (W, H):
+        im = im.resize((W, H), Image.Resampling.LANCZOS)
+
     data = im.tobytes()
-    assert len(data) == W * H
-    open(binf, "wb").write(data)
+    assert len(data) == W * H, f"Expecting {W * H} bytes, obtained {len(data)}"
+
+    with open(bin_path, "wb") as f:
+        f.write(data)
+    print(f"Success: {W * H} bytes (1 byte/pixel) stored in '{bin_path}'.")
 
 
-def bin_to_png(binf, png):
-    data = open(binf, "rb").read()
+def bin_to_png(bin_path, png_path):
+    with open(bin_path, "rb") as f:
+        data = f.read()
+
     if len(data) != W * H:
-        raise ValueError("expected %d bytes, got %d" % (W * H, len(data)))
-    Image.frombytes("L", (W, H), data).save(png)
+        raise ValueError(f"Expecting {W * H} bytes, obtained {len(data)}")
+
+    Image.frombytes("L", (W, H), data).save(png_path)
+    print(f"Success: Image done and saved in '{png_path}'.")
 
 
 if __name__ == "__main__":
-    cmd,src,dest = sys.argv[1], sys.argv[2], sys.argv[3]
-    if cmd == "png2bin" and len(sys.argv) == 4: png_to_bin(src,dest)
-    elif cmd == "bin2png" and len(sys.argv) == 4: bin_to_png(src,dest)
-    else: sys.exit("cmd not recognized or incorrect number of arguments")
+    if len(sys.argv) != 4:
+        sys.exit("Use: python script.py <png2bin|bin2png> <origin> <destiny>")
+
+    cmd, src, dest = sys.argv[1], sys.argv[2], sys.argv[3]
+
+    if cmd == "png2bin":
+        png_to_bin(src, dest)
+    elif cmd == "bin2png":
+        bin_to_png(src, dest)
+    else:
+        sys.exit(f"Command '{cmd}' not recognized. Use 'png2bin' or 'bin2png'.")
