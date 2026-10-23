@@ -129,11 +129,18 @@ class Ascon(numBlocks: Int = 1024) extends Module {
 
         keyReg := io.key
 
-        stateReg(1) := io.key(127, 64)
-        stateReg(2) := io.key(63, 0)
+        // stateReg(1) := io.key(127, 64)	//Big endian
+        // stateReg(2) := io.key(63, 0)		// --
 
-        stateReg(3) := io.nonce(127, 64)
-        stateReg(4) := io.nonce(63, 0)
+		stateReg(1) := io.key(63, 0)		//Little endian
+		stateReg(2) := io.key(127, 64)		// --
+
+        // stateReg(3) := io.nonce(127, 64)	//Big endian
+        // stateReg(4) := io.nonce(63, 0)	// --
+
+		stateReg(3) := io.nonce(63, 0)		//Little endian
+		stateReg(4) := io.nonce(127, 64)	// --
+
         state := sInit
         perm_counter := 0.U
         blockCount := 0.U
@@ -146,8 +153,8 @@ class Ascon(numBlocks: Int = 1024) extends Module {
       stateReg := next
       perm_counter := perm_counter + 1.U
       when(perm_counter === 11.U) {
-        stateReg(3) := next(3) ^ keyReg(127, 64)
-        stateReg(4) := next(4) ^ keyReg(63, 0) ^ AsconCons.DOMAIN_SEP
+        stateReg(3) := next(3) ^ keyReg(63, 0)
+        stateReg(4) := next(4) ^ keyReg(127, 64) ^ AsconCons.DOMAIN_SEP
         state := sWaitPixel
       }
     }
@@ -188,8 +195,8 @@ class Ascon(numBlocks: Int = 1024) extends Module {
 
     is(sPad) {
       stateReg(0) := stateReg(0) ^ 1.U
-      stateReg(2) := stateReg(2) ^ keyReg(127, 64)
-      stateReg(3) := stateReg(3) ^ keyReg(63, 0)
+      stateReg(2) := stateReg(2) ^ keyReg(63, 0)
+      stateReg(3) := stateReg(3) ^ keyReg(127, 64)
       perm_counter := 0.U
       state := sFinal
     }
@@ -198,8 +205,8 @@ class Ascon(numBlocks: Int = 1024) extends Module {
       stateReg := next
       perm_counter := perm_counter + 1.U
       when(perm_counter === 11.U) {
-        stateReg(3) := next(3) ^ keyReg(127, 64) // tag = x3||x4 ^ key
-        stateReg(4) := next(4) ^ keyReg(63, 0)
+        stateReg(3) := next(3) ^ keyReg(63, 0) 		//tag = x3||x4 ^ key
+        stateReg(4) := next(4) ^ keyReg(127, 64)
         state := sTag
       }
 

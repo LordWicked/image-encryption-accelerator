@@ -29,10 +29,7 @@ object AsconInitVectors {
   /** Byte-order convention: 16 bytes -> two little-endian 64-bit words, first word on top.
     * This is how the testbench / packer hands key and nonce to the core.
     */
-  def toCoreInput(bytes: Seq[Int]): BigInt = {
-    def le(b: Seq[Int]) = b.zipWithIndex.map { case (v, i) => BigInt(v) << (8 * i) }.sum
-    (le(bytes.take(8)) << 64) | le(bytes.drop(8))
-  }
+  def toCoreInput(bytes: Seq[Int]): BigInt = bytes.zipWithIndex.map { case (v, i) => BigInt(v) << (8 * i) }.sum
 }
 
 class AsconInitSpec extends AnyFlatSpec with ChiselScalatestTester {
