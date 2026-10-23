@@ -10,7 +10,6 @@ object AsconState extends ChiselEnum {
 }
 
 object AsconPermutation {
-
   def rot_right(x: UInt, n: Int): UInt = {
     Cat(x(n - 1, 0), x(63, n))
   }
@@ -78,7 +77,16 @@ object AsconPermutation {
 }
 
 import AsconState._
-class Ascon() extends Module {
+
+class AsconRoundUnit extends Module {
+  val io = IO(new RoundIO)
+  io.stateReg_out := AsconPermutation.compute(
+    io.stateReg_in,
+    io.perm_counter_in
+  )
+}
+
+class Ascon(numBlocks: Int = 1024) extends Module {
 
   // 1 Phase
   val io = IO(new AsconIO())
@@ -94,6 +102,9 @@ class Ascon() extends Module {
 
   val secondHalf = RegInit(false.B)
 
+  val blockCount = RegInit(0.U(log2Ceil(numBlocks).W))
+  val lastBlock = RegInit(false.B)
+
   // Stantard/Safety values
   io.pixels_in.ready := false.B
   io.enc_pixels_out.valid := false.B
@@ -103,76 +114,127 @@ class Ascon() extends Module {
 
   io.dbg_state := stateReg
 
+  val round = Module(new AsconRoundUnit)
+  round.io.perm_counter_in := perm_counter
+  round.io.stateReg_in := stateReg
+  val next = round.io.stateReg_out
+
   // Phase n1
   switch(state) {
     is(sIdle) {
       when(io.start) {
         // Initialization Vector decided by the Ascon Creators
         // stateReg(0) := "h80400c0600000000".U(64.W)   // Ascon-128's IV
-        stateReg(0) := "h00001000808C0001".U(64.W)    // Ascon-AEAD128
+        stateReg(0) := "h00001000808C0001".U(64.W) // Ascon-AEAD128
 
-        keyReg  := io.key
+        keyReg := io.key
 
-        stateReg(1) := io.key(127, 64)
-        stateReg(2) := io.key(63, 0)
+        // stateReg(1) := io.key(127, 64)	//Big endian
+        // stateReg(2) := io.key(63, 0)		// --
 
-        stateReg(3) := io.nonce(127, 64)
-        stateReg(4) := io.nonce(63, 0)
+		stateReg(1) := io.key(63, 0)		//Little endian
+		stateReg(2) := io.key(127, 64)		// --
+
+        // stateReg(3) := io.nonce(127, 64)	//Big endian
+        // stateReg(4) := io.nonce(63, 0)	// --
+
+		stateReg(3) := io.nonce(63, 0)		//Little endian
+		stateReg(4) := io.nonce(127, 64)	// --
+
         state := sInit
         perm_counter := 0.U
+        blockCount := 0.U
+        lastBlock := false.B
+
       }
     }
-    // NOT FINISHED -> Assigned to colleague Max
+
     is(sInit) {
-      val next = AsconPermutation.compute(stateReg, perm_counter)
       stateReg := next
       perm_counter := perm_counter + 1.U
       when(perm_counter === 11.U) {
-        stateReg(3) := next(3) ^ keyReg(127,64)
-        stateReg(4) := next(4) ^ keyReg(63, 0) ^ AsconCons.DOMAIN_SEP
+        stateReg(3) := next(3) ^ keyReg(63, 0)
+        stateReg(4) := next(4) ^ keyReg(127, 64) ^ AsconCons.DOMAIN_SEP
         state := sWaitPixel
       }
     }
 
-    is (sWaitPixel) {
-      // io.pixels_in.ready := io.enc_pixels_out.ready // ??
-// io.enc_pixels_out.valid := io.pixels_in.valid // ??
+    is(sWaitPixel) {
+      io.pixels_in.ready := io.enc_pixels_out.ready
+      io.enc_pixels_out.valid := io.pixels_in.valid
 
-// val rateWord = Mux(secondHalf, stateReg(1), stateReg(0))
-// val cipher = rateWord ^ io.pixels_in.bits
-// io.enc_pixels_out := cipher
+      val rateWord = Mux(secondHalf, stateReg(1), stateReg(0))
+      val cipher = rateWord ^ io.pixels_in.bits
+      io.enc_pixels_out.bits := cipher
 
-// when(io.pixels_in.fire) {
-//   when(!secondHalf) {
-//     stateReg(0) := cipher
-//   }.otherwise 
-// }
+      when(io.pixels_in.fire) {
+        when(!secondHalf) {
+          stateReg(0) := cipher
+        }.otherwise {
+          stateReg(1) := cipher
+          perm_counter := 4.U
+          state := sPermute
+          blockCount := blockCount + 1.U
+          lastBlock := blockCount === (numBlocks - 1).U
+        }
+        secondHalf := !secondHalf
+      }
+    }
+
+    is(sPermute) {
+      stateReg := next
+      perm_counter := perm_counter + 1.U
+      when(perm_counter === 11.U) {
+        when(lastBlock) {
+          state := sPad
+        }.otherwise {
+          state := sWaitPixel
+        }
+      }
+    }
+
+    is(sPad) {
+      stateReg(0) := stateReg(0) ^ 1.U
+      stateReg(2) := stateReg(2) ^ keyReg(63, 0)
+      stateReg(3) := stateReg(3) ^ keyReg(127, 64)
+      perm_counter := 0.U
+      state := sFinal
+    }
+
+    is(sFinal) {
+      stateReg := next
+      perm_counter := perm_counter + 1.U
+      when(perm_counter === 11.U) {
+        stateReg(3) := next(3) ^ keyReg(63, 0) 		//tag = x3||x4 ^ key
+        stateReg(4) := next(4) ^ keyReg(127, 64)
+        state := sTag
+      }
 
     }
 
-    is (sPermute) {
-    
-    }
-    
-    is (sPad) {
-
-    }
-    
-    is (sFinal) {
-
-    }
-    
-    is (sTag) {
-    
+    is(sTag) {
+      io.enc_pixels_out.valid := true.B
+      io.enc_pixels_out.bits := Mux(secondHalf, stateReg(4), stateReg(3))
+      when(io.enc_pixels_out.fire) {
+        secondHalf := !secondHalf
+        when(secondHalf) { state := sIdle }
+      }
     }
 
   }
 
 }
 
-// Simplest IO possible for MVP. Sends each time 64 pixels (grayscale), 64 times.
-//So it has only 64 clock which is extremely fast.
-//Without sending bytes in a middle of a pixel problems.
+class RoundIO() extends Bundle {
+  val stateReg_in = Input(Vec(5, UInt(64.W)))
+  val perm_counter_in = Input(UInt(4.W))
+
+  val stateReg_out = Output(Vec(5, UInt(64.W)))
+}
+
+// Simplest IO possible for MVP. Sends each time 64-bit transfers, 8 grayscale pixels each, two transfers per 128-bit block”.
+// So it has only 64 clock which is extremely fast.
+// Without sending bytes in a middle of a pixel problems.
 class AsconIO() extends Bundle {
   val start = Input(Bool())
   val key = Input(UInt(128.W))
