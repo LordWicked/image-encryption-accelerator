@@ -4,11 +4,12 @@ import chisel3._
 import chisel3.util._
 
 object AsconCons {
-    val roundConstants: Seq[Int] = Seq(0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b)
+  val roundConstants: Seq[Int] =
+    Seq(0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b)
 
-    def const_addition(i: UInt): UInt = VecInit(roundConstants.map(_.U(64.W)))(i)
+  def const_addition(i: UInt): UInt = VecInit(roundConstants.map(_.U(64.W)))(i)
 
-    val DOMAIN_SEP = "h8000000000000000".U(64.W)   // bit 63 of x4
+  val DOMAIN_SEP = "h8000000000000000".U(64.W) // bit 63 of x4
 
   // val s_box: Vec[UInt] = {
   //   VecInit(
@@ -46,6 +47,5 @@ object AsconCons {
   //     "h17".U(64.W)
   //   )
   // }
-
 
 }
