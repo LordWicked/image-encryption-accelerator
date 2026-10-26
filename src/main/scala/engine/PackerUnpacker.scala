@@ -3,18 +3,19 @@ package engine
 import chisel3._
 import chisel3.util._
 
-// packer accumulates 8 bytes to output a 64x64 bit block
-class Packer extends Module {
+// packer accumulates nBytes bytes to output one (8 * nBytes) bit word
+// e.g. nBytes = 8 gives the 64 bit words the Ascon core expects
+class Packer(nBytes: Int = 16) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(UInt(8.W)))
-    val out = Decoupled(UInt((64 * 64).W))
+    val out = Decoupled(UInt((8 * nBytes).W))
   })
 
-  // vector to hold 16 bytes of data
-  val buffer = RegInit(VecInit(Seq.fill(16)(0.U(8.W))))
+  // vector to hold nBytes bytes of data
+  val buffer = RegInit(VecInit(Seq.fill(nBytes)(0.U(8.W))))
 
-  // counter from 0 to 15 to track received bytes
-  val count = RegInit(0.U(4.W))
+  // counter from 0 to nBytes - 1 to track received bytes
+  val count = RegInit(0.U(log2Ceil(nBytes).W))
 
   // flag that goes high when the bucket is full
   val full = RegInit(false.B)
@@ -25,7 +26,7 @@ class Packer extends Module {
   // we are sending valid data when the bucket is full
   io.out.valid := full
 
-  // squash the vector into a single 128 bit wire
+  // squash the vector into a single wide word (byte 0 in the lowest bits)
   io.out.bits := buffer.asUInt
 
   // logic to fill the bucket
@@ -33,8 +34,8 @@ class Packer extends Module {
     buffer(count) := io.in.bits
     count := count + 1.U
 
-    // if we just wrote the 15th index we are full
-    when(count === 15.U) {
+    // if we just wrote the last index we are full
+    when(count === (nBytes - 1).U) {
       full := true.B
     }
   }
@@ -46,30 +47,30 @@ class Packer extends Module {
   }
 }
 
-// unpacker breaks a 128 bit block into 16 individual bytes
-class Unpacker extends Module {
+// unpacker breaks one (8 * nBytes) bit word into nBytes individual bytes
+class Unpacker(nBytes: Int = 16) extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(UInt(128.W)))
+    val in = Flipped(Decoupled(UInt((8 * nBytes).W)))
     val out = Decoupled(UInt(8.W))
   })
 
-  val buffer = RegInit(VecInit(Seq.fill(16)(0.U(8.W))))
-  val count = RegInit(0.U(4.W))
+  val buffer = RegInit(VecInit(Seq.fill(nBytes)(0.U(8.W))))
+  val count = RegInit(0.U(log2Ceil(nBytes).W))
 
   // flag that goes high when we are busy outputting bytes
   val active = RegInit(false.B)
 
-  // we can only receive a new block if we are not busy
+  // we can only receive a new word if we are not busy
   io.in.ready := !active
   io.out.valid := active
 
   // output one byte at a time based on the counter
   io.out.bits := buffer(count)
 
-  // logic to receive the big block
+  // logic to receive the wide word
   when(io.in.valid && io.in.ready) {
-    // cast the 128 bit block directly into our 16 byte vector
-    buffer := io.in.bits.asTypeOf(Vec(16, UInt(8.W)))
+    // cast the word directly into our byte vector
+    buffer := io.in.bits.asTypeOf(Vec(nBytes, UInt(8.W)))
     active := true.B
     count := 0.U
   }
@@ -79,7 +80,7 @@ class Unpacker extends Module {
     count := count + 1.U
 
     // if we just sent the last byte we are done
-    when(count === 15.U) {
+    when(count === (nBytes - 1).U) {
       active := false.B
     }
   }
