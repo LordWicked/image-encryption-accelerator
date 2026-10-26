@@ -3,11 +3,11 @@ package engine
 import chisel3._
 import chisel3.util._
 
-// packer accumulates 8 bytes to output a 64x64 bit block
+// packer accumulates 16 bytes to output a 128 bit block
 class Packer extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(UInt(8.W)))
-    val out = Decoupled(UInt((64 * 64).W))
+    val out = Decoupled(UInt(128.W))
   })
 
   // vector to hold 16 bytes of data

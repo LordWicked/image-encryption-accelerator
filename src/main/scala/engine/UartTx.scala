@@ -18,6 +18,10 @@ class UartTx(cyclesPerBit: Int) extends Module {
 
   io.txd := true.B
   io.out.valid := false.B
+  io.out.bits := 0.U
+
+  // A new byte is only accepted when the previous one was fully sent
+  io.in.ready := !busy
 
   when(!busy) {
 
