@@ -43,3 +43,19 @@ Tag `a28657f6e82fe53d08b09eff9330bd2b` (for plaintext bytes `00 … 1f`):
 
     key_int = int.from_bytes(key_bytes, "little")
     beats   = [int.from_bytes(block[i:i + 8], "little") for i in (0, 8)]
+## Running the MVP pipeline
+
+Needs Python with Pillow (`pip install pillow`).
+
+```
+sbt run                      # uses assets/128x128-pixel-art.jpg
+sbt "run path/to/image.png"  # any other image
+```
+
+1. `python/imgtool.py` turns the image into 64x64 grayscale bytes.
+2. The bytes go through `Top` (Packer -> Ascon -> Unpacker) in simulation,
+   with the fixed MVP key and nonce (bytes `00 01 … 0f`).
+3. The ciphertext is turned back into an image, the 16-byte tag is saved apart.
+4. The Verilog of `Top` is written to `generated/Top.sv`.
+
+Results in `output/`: `original.png`, `encrypted.png`, `encrypted.bin` and `tag.bin`.

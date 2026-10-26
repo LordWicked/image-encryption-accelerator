@@ -16,5 +16,6 @@ test_run_dir/
 hardware_image.png
 imagem_saida.png
 resultado_hardware.png
-# Generated Verilog (sbt run)
+# Generated Verilog and images (sbt run)
 generated/
+output/
