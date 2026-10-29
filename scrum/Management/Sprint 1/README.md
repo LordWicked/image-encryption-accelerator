@@ -22,10 +22,3 @@ EMPTY
 
 <img width="1296" height="681" alt="image" src="../../../assets/after_1week.png" />
 
-### Burndown Chart for the sprint
-
-EMPTY
-
-### Gantt Chart
-
-EMPTY
