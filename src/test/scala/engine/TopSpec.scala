@@ -20,10 +20,10 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
 
     // the same 2 blocks as AsconDataSpec / AsconTagSpec, but as single bytes
     // going through Packer -> Ascon -> Unpacker
-    def toBytes(beats: Seq[BigInt]): Seq[Int] =
-      beats.flatMap(beat => (0 until 8).map(i => ((beat >> (8 * i)) & 0xff).toInt))
-    val plain = toBytes(plainBeats)
-    val expected = toBytes(cipherBeats) ++ toBytes(tagBeats)
+    def toBytes(blocks: Seq[BigInt]): Seq[Int] =
+      blocks.flatMap(b => (0 until 16).map(i => ((b >> (8 * i)) & 0xff).toInt))
+    val plain = toBytes(plainBlocks)
+    val expected = toBytes(cipherBlocks) ++ toBytes(Seq(tag))
 
     test(new Top(numBlocks = 2)) { dut =>
       dut.io.key.poke(toCoreInput(keyBytes).U(128.W))
