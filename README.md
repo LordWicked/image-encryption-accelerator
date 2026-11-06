@@ -43,16 +43,23 @@ Tag `a28657f6e82fe53d08b09eff9330bd2b` (for plaintext bytes `00 … 1f`):
 
     key_int = int.from_bytes(key_bytes, "little")
     beats   = [int.from_bytes(block[i:i + 8], "little") for i in (0, 8)]
-## Running the MVP pipeline
+## Running the pipeline
 
 Needs Python with Pillow (`pip install pillow`).
 
 ```
-sbt run                      # uses assets/128x128-pixel-art.jpg
-sbt "run path/to/image.png"  # any other image
+sbt run                                 # uses assets/128x128-pixel-art.jpg, 256x256 RGB
+sbt "run path/to/image.png"             # any other image, 256x256 RGB
+sbt "run path/to/image.png 128 96 rgb"  # width, height and gray or rgb
+sbt "run path/to/image.png 64 64 gray"  # the MVP format, the fastest to simulate
 ```
 
-1. `python/imgtool.py` turns the image into 64x64 grayscale bytes.
+The hardware is generated for one image format: `Top(width, height, channels)`,
+with 1 channel for grayscale and 3 for RGB (bytes R, G, B of each pixel, in the
+same 8-bit stream). The core has no padding yet, so `width * height * channels`
+must be a multiple of 16 bytes. Any size with both sides a multiple of 4 works.
+
+1. `python/imgtool.py` scales the image to that size and turns it into bytes.
 2. The bytes go through `Top` (Packer -> Ascon -> Unpacker) in simulation,
    with the fixed MVP key and nonce (bytes `00 01 … 0f`).
 3. The ciphertext is turned back into an image, the 16-byte tag is saved apart.
