@@ -2,6 +2,7 @@ package engine
 
 import chisel3._
 import chisel3.util._
+import os.Source.WritableSource
 
 // top level of the MVP (issue #26): bytes -> Packer -> Ascon -> Unpacker -> bytes
 // no UART yet, the image is streamed in simulation by Main
@@ -28,9 +29,10 @@ class Top(width: Int = 64, height: Int = 64, channels: Int = 1) extends Module {
   })
 
   // the Ascon core works on 64 bit words, so the packers group 8 bytes
-  val packer = Module(new Packer(nBytes = 8))
   val ascon = Module(new Ascon(numBlocks))
-  val unpacker = Module(new Unpacker(nBytes = 8))
+  val nBytes = ascon.io.pixels_in.bits.getWidth / 8
+  val packer = Module(new Packer(nBytes))
+  val unpacker = Module(new Unpacker(nBytes))
 
   ascon.io.start := io.start
   ascon.io.key := io.key

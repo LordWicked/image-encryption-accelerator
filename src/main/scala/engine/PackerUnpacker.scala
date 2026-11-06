@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 // packer accumulates nBytes bytes to output one (8 * nBytes) bit word
-// e.g. nBytes = 8 gives the 64 bit words the Ascon core expects
+// the default nBytes = 16 gives the 128 bit blocks the Ascon core expects
 class Packer(nBytes: Int = 16) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(UInt(8.W)))

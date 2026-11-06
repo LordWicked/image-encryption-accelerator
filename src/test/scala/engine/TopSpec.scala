@@ -46,12 +46,12 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
     import AsconTagVectors._
 
     // the same 2 blocks as AsconDataSpec / AsconTagSpec, but as single bytes
-    def toBytes(beats: Seq[BigInt]): Seq[Int] =
-      beats.flatMap(beat => (0 until 8).map(i => ((beat >> (8 * i)) & 0xff).toInt))
-    val expected = toBytes(cipherBeats) ++ toBytes(tagBeats)
+    def toBytes(blocks: Seq[BigInt]): Seq[Int] =
+      blocks.flatMap(b => (0 until 16).map(i => ((b >> (8 * i)) & 0xff).toInt))
+    val expected = toBytes(cipherBlocks) ++ toBytes(Seq(tag))
 
     test(new Top(width = 8, height = 4)) { dut =>
-      val result = encrypt(dut, toBytes(plainBeats))
+      val result = encrypt(dut, toBytes(plainBlocks))
       assert(result == expected, s"\n  got      ${hex(result)}\n  expected ${hex(expected)}")
     }
   }
