@@ -124,19 +124,13 @@ class Ascon(numBlocks: Int = 1024) extends Module {
     is(sIdle) {
       when(io.start) {
         // Initialization Vector decided by the Ascon Creators
-        // stateReg(0) := "h80400c0600000000".U(64.W)   // Ascon-128's IV
         stateReg(0) := "h00001000808C0001".U(64.W) // Ascon-AEAD128
 
         keyReg := io.key
 
-        // stateReg(1) := io.key(127, 64)	//Big endian
-        // stateReg(2) := io.key(63, 0)		// --
-
 		stateReg(1) := io.key(63, 0)		//Little endian
 		stateReg(2) := io.key(127, 64)		// --
 
-        // stateReg(3) := io.nonce(127, 64)	//Big endian
-        // stateReg(4) := io.nonce(63, 0)	// --
 
 		stateReg(3) := io.nonce(63, 0)		//Little endian
 		stateReg(4) := io.nonce(127, 64)	// --
@@ -163,21 +157,17 @@ class Ascon(numBlocks: Int = 1024) extends Module {
       io.pixels_in.ready := io.enc_pixels_out.ready
       io.enc_pixels_out.valid := io.pixels_in.valid
 
-      val rateWord = Mux(secondHalf, stateReg(1), stateReg(0))
-      val cipher = rateWord ^ io.pixels_in.bits
+      val rate = Cat(stateReg(1), stateReg(0))
+      val cipher = rate ^ io.pixels_in.bits
       io.enc_pixels_out.bits := cipher
 
       when(io.pixels_in.fire) {
-        when(!secondHalf) {
-          stateReg(0) := cipher
-        }.otherwise {
-          stateReg(1) := cipher
-          perm_counter := 4.U
-          state := sPermute
-          blockCount := blockCount + 1.U
-          lastBlock := blockCount === (numBlocks - 1).U
-        }
-        secondHalf := !secondHalf
+        stateReg(0) := cipher(63, 0)
+        stateReg(1) := cipher(127, 64)
+        perm_counter := 4.U
+        state := sPermute
+        blockCount := blockCount + 1.U
+        lastBlock := blockCount === (numBlocks - 1).U
       }
     }
 
@@ -214,10 +204,9 @@ class Ascon(numBlocks: Int = 1024) extends Module {
 
     is(sTag) {
       io.enc_pixels_out.valid := true.B
-      io.enc_pixels_out.bits := Mux(secondHalf, stateReg(4), stateReg(3))
+      io.enc_pixels_out.bits := Cat(stateReg(4), stateReg(3))
       when(io.enc_pixels_out.fire) {
-        secondHalf := !secondHalf
-        when(secondHalf) { state := sIdle }
+        state := sIdle
       }
     }
 
@@ -244,6 +233,6 @@ class AsconIO() extends Bundle {
   val dbg_state = Output(Vec(5, UInt(64.W)))
 
   // 8 pixels
-  val pixels_in = (Flipped(Decoupled(UInt(64.W))))
-  val enc_pixels_out = Decoupled(UInt(64.W))
+  val pixels_in = Flipped(Decoupled(UInt(128.W)))
+  val enc_pixels_out = Decoupled(UInt(128.W))
 }

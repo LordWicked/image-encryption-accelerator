@@ -7,7 +7,7 @@ import chisel3.util._
 class Packer extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(UInt(8.W)))
-    val out = Decoupled(UInt((64 * 64).W))
+    val out = Decoupled(UInt(128.W))
   })
 
   // vector to hold 16 bytes of data

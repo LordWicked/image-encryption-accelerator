@@ -1,7 +1,5 @@
 package engine
 
-package engine
-
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,8 +9,8 @@ import org.scalatest.flatspec.AnyFlatSpec
   * From the official Ascon reference (pyascon, NIST version): tag = a28657f6e82fe53d08b09eff9330bd2b
   */
 object AsconTagVectors {
-  /** The tag as two 64-bit beats in the core's word format (little-endian bytes). */
-  val tagBeats = Seq(BigInt("3de52fe8f65786a2", 16), BigInt("2bbd3093ff9eb008", 16))
+  /** The tag as one 128-bit transfer: the 16 tag bytes as a little-endian integer (x4 || x3). */
+  val tag = BigInt("2bbd3093ff9eb0083de52fe8f65786a2", 16)
 }
 
 class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
@@ -26,10 +24,10 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
     assert(got == expected, s"$what\n  got      ${hex(got)}\n  expected ${hex(expected)}")
   }
 
-  def expectWord(dut: Ascon, expected: BigInt, what: String): Unit = {
+  def expectOut(dut: Ascon, expected: BigInt, what: String): Unit = {
     dut.io.enc_pixels_out.valid.expect(true.B, s"$what: output not valid")
     val got = dut.io.enc_pixels_out.bits.peek().litValue
-    assert(got == expected, f"$what: got $got%016x, expected $expected%016x")
+    assert(got == expected, f"$what: got $got%032x, expected $expected%032x")
   }
 
   /** One full encryption of the two reference blocks, from start pulse to tag. */
@@ -47,15 +45,12 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
 
     // Two blocks of pixels, each followed by p8
     dut.io.enc_pixels_out.ready.poke(true.B)
-    for (block <- 0 until 2) {
-      for (half <- 0 until 2) {
-        val i = 2 * block + half
-        dut.io.pixels_in.valid.poke(true.B)
-        dut.io.pixels_in.bits.poke(plainBeats(i).U(64.W))
-        dut.io.pixels_in.ready.expect(true.B, s"run $run, beat $i: core not ready")
-        expectWord(dut, cipherBeats(i), s"run $run, ciphertext beat $i")
-        dut.clock.step(1)
-      }
+    for (i <- 0 until 2) {
+      dut.io.pixels_in.valid.poke(true.B)
+      dut.io.pixels_in.bits.poke(plainBlocks(i).U(128.W))
+      dut.io.pixels_in.ready.expect(true.B, s"run $run, block $i: core not ready")
+      expectOut(dut, cipherBlocks(i), s"run $run, ciphertext block $i")
+      dut.clock.step(1)
       dut.io.pixels_in.valid.poke(false.B)
       dut.clock.step(8)
     }
@@ -68,16 +63,14 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
       dut.clock.step(1)
     }
 
-    // Tag word 1 must stay on the output while the receiver stalls
-    expectWord(dut, tagBeats(0), s"run $run, tag word 1")
+    // The tag must stay on the output while the receiver stalls
+    expectOut(dut, tag, s"run $run, tag")
     dut.clock.step(2)
-    expectWord(dut, tagBeats(0), s"run $run, tag word 1 after stall")
+    expectOut(dut, tag, s"run $run, tag after stall")
 
-    // Receiver ready: both tag words go out
+    // Receiver ready: the tag goes out in one transfer
     dut.io.enc_pixels_out.ready.poke(true.B)
-    expectWord(dut, tagBeats(0), s"run $run, tag word 1")
-    dut.clock.step(1)
-    expectWord(dut, tagBeats(1), s"run $run, tag word 2")
+    expectOut(dut, tag, s"run $run, tag")
     dut.clock.step(1)
 
     // Done: core is back in sIdle, nothing more on the output
@@ -93,8 +86,8 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
     test(new Ascon(numBlocks = 2)) { dut =>
       // Run 1: normal encryption
       encryptAndCheckTag(dut, run = 1)
-      // Run 2: same inputs again. Only passes if blockCount, lastBlock and
-      // secondHalf were reset correctly after the first image.
+      // Run 2: same inputs again. Only passes if blockCount and lastBlock
+      // were reset correctly after the first image.
       encryptAndCheckTag(dut, run = 2)
     }
   }

@@ -6,21 +6,30 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 /** Reference values for the data phase, from the official Ascon reference (pyascon, NIST version).
   * Key = nonce = bytes 00..0f (as in AsconInitVectors), empty associated data,
-  * plaintext = bytes 00..1f, i.e. two 16-byte blocks. The ciphertext words below match
+  * plaintext = bytes 00..1f, i.e. two 16-byte blocks. The ciphertext below matches
   * the reference's full ascon_encrypt output.
   */
 object AsconDataVectors {
   private def w(hex: String) = BigInt(hex, 16)
 
-  /** Plaintext beats: 8 pixels per 64-bit word, pixel 0 in the lowest byte. */
-  val plainBeats = Seq(w("0706050403020100"), w("0f0e0d0c0b0a0908"),
-                       w("1716151413121110"), w("1f1e1d1c1b1a1918"))
+  /** Joins two 64-bit words into one 128-bit transfer: low word = x0, high word = x1. */
+  def block(x0: BigInt, x1: BigInt): BigInt = (x1 << 64) | x0
 
-  /** Expected ciphertext beats, in the same word format. */
-  val cipherBeats = Seq(w("ee4aa4d289d270e7"), w("e37452ce8ea4d07c"),
-                        w("97c4dc63e1d7ba81"), w("b1beeb0d6173780f"))
+  /** Plaintext blocks: 16 pixels per transfer, pixel 0 in bits 7..0.
+    * Equal to the 16 plaintext bytes read as one little-endian integer.
+    */
+  val plainBlocks = Seq(
+    block(w("0706050403020100"), w("0f0e0d0c0b0a0908")),
+    block(w("1716151413121110"), w("1f1e1d1c1b1a1918"))
+  )
 
-  /** State after both beats of block 0 are absorbed, before p8. */
+  /** Expected ciphertext blocks, in the same format. */
+  val cipherBlocks = Seq(
+    block(w("ee4aa4d289d270e7"), w("e37452ce8ea4d07c")),
+    block(w("97c4dc63e1d7ba81"), w("b1beeb0d6173780f"))
+  )
+
+  /** State after block 0 is absorbed, before p8. */
   val absorbed0 = Seq(w("ee4aa4d289d270e7"), w("e37452ce8ea4d07c"), w("afe01d6bf4bcb26c"),
                       w("9216fd8172857e38"), w("f86a1691b9b11607"))
 
@@ -28,7 +37,7 @@ object AsconDataVectors {
   val afterP8Block0 = Seq(w("80d2c977f2c5ab91"), w("aea0f6117a696117"), w("d8c89a760645dfd9"),
                           w("1aa8cc9c4648a66b"), w("1954d9e133342d26"))
 
-  /** State after both beats of block 1 are absorbed, before p8. */
+  /** State after block 1 is absorbed, before p8. */
   val absorbed1 = Seq(w("97c4dc63e1d7ba81"), w("b1beeb0d6173780f"), w("d8c89a760645dfd9"),
                       w("1aa8cc9c4648a66b"), w("1954d9e133342d26"))
 
@@ -62,14 +71,14 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
     check(dut, afterInit, "after initialization")
   }
 
-  /** Sends one 64-bit beat and checks the ciphertext that comes out in the same cycle. */
-  def sendBeat(dut: Ascon, i: Int): Unit = {
+  /** Sends one 128-bit block and checks the ciphertext that comes out in the same cycle. */
+  def sendBlock(dut: Ascon, i: Int): Unit = {
     dut.io.pixels_in.valid.poke(true.B)
-    dut.io.pixels_in.bits.poke(plainBeats(i).U(64.W))
-    dut.io.pixels_in.ready.expect(true.B, s"beat $i: core not ready")
-    dut.io.enc_pixels_out.valid.expect(true.B, s"beat $i: output not valid")
+    dut.io.pixels_in.bits.poke(plainBlocks(i).U(128.W))
+    dut.io.pixels_in.ready.expect(true.B, s"block $i: core not ready")
+    dut.io.enc_pixels_out.valid.expect(true.B, s"block $i: output not valid")
     val got = dut.io.enc_pixels_out.bits.peek().litValue
-    assert(got == cipherBeats(i), f"beat $i: ciphertext $got%016x, expected ${cipherBeats(i)}%016x")
+    assert(got == cipherBlocks(i), f"block $i: ciphertext $got%032x, expected ${cipherBlocks(i)}%032x")
     dut.clock.step(1)
   }
 
@@ -78,13 +87,14 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
       initialize(dut)
       dut.io.enc_pixels_out.ready.poke(true.B)
 
-      // Block 0, with a one-cycle gap (valid low) between the two beats
-      sendBeat(dut, 0)
+      // Two cycles without input (valid low): nothing may happen
       dut.io.pixels_in.valid.poke(false.B)
       dut.io.enc_pixels_out.valid.expect(false.B, "output valid without input")
-      dut.clock.step(1)
-      check(dut, cipherBeats(0) +: afterInit.tail, "gap: state changed without input")
-      sendBeat(dut, 1)
+      dut.clock.step(2)
+      check(dut, afterInit, "gap: state changed without input")
+
+      // Block 0
+      sendBlock(dut, 0)
       check(dut, absorbed0, "block 0 absorbed")
 
       // During p8 the core must not accept input
@@ -94,14 +104,13 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
       check(dut, afterP8Block0, "block 0 after p8")
 
       // Block 1, with a two-cycle stall from the receiver (ready low)
-      dut.io.pixels_in.bits.poke(plainBeats(2).U(64.W))
+      dut.io.pixels_in.bits.poke(plainBlocks(1).U(128.W))
       dut.io.enc_pixels_out.ready.poke(false.B)
       dut.io.pixels_in.ready.expect(false.B, "core accepts input while receiver stalls")
       dut.clock.step(2)
       check(dut, afterP8Block0, "stall: state changed although receiver was not ready")
       dut.io.enc_pixels_out.ready.poke(true.B)
-      sendBeat(dut, 2)
-      sendBeat(dut, 3)
+      sendBlock(dut, 1)
       check(dut, absorbed1, "block 1 absorbed")
 
       dut.clock.step(8)
