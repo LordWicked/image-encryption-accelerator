@@ -2,9 +2,8 @@ package engine
 
 import chisel3._
 import chisel3.util._
-import os.Source.WritableSource
 
-// top level of the MVP (issue #26): bytes -> Packer -> Ascon -> Unpacker -> bytes
+// top level: RGB pixels -> PixelFormatter -> Packer -> Ascon -> Unpacker -> bytes
 // no UART yet, the image is streamed in simulation by Main
 // generated for one image format: width x height pixels of channels bytes
 // (1 = grayscale, 3 = RGB), the core itself only sees the number of blocks
@@ -23,12 +22,14 @@ class Top(width: Int = 64, height: Int = 64, channels: Int = 1) extends Module {
     val key = Input(UInt(128.W))
     val nonce = Input(UInt(128.W))
 
-    // plaintext pixels in, ciphertext bytes out, followed by the 16 byte tag
-    val in = Flipped(Decoupled(UInt(8.W)))
+    // RGB pixels in, ciphertext bytes out, followed by the 16 byte tag
+    val in = Flipped(Decoupled(UInt(24.W)))
     val out = Decoupled(UInt(8.W))
   })
 
-  // the Ascon core works on 64 bit words, so the packers group 8 bytes
+  val formatter = Module(new PixelFormatter(channels))
+
+  // the packers group the bytes into the blocks the Ascon core works on
   val ascon = Module(new Ascon(numBlocks))
   val nBytes = ascon.io.pixels_in.bits.getWidth / 8
   val packer = Module(new Packer(nBytes))
@@ -38,7 +39,8 @@ class Top(width: Int = 64, height: Int = 64, channels: Int = 1) extends Module {
   ascon.io.key := io.key
   ascon.io.nonce := io.nonce
 
-  packer.io.in <> io.in
+  formatter.io.in <> io.in
+  packer.io.in <> formatter.io.out
   ascon.io.pixels_in <> packer.io.out
   unpacker.io.in <> ascon.io.enc_pixels_out
   io.out <> unpacker.io.out
