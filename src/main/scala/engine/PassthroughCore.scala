@@ -14,17 +14,14 @@ class StreamIO extends Bundle {
   val out = Decoupled(UInt(8.W))
 }
 
-// simple passthrough core for the walking skeleton (issue #8)
-class PassthroughCore extends Module {
+// any core with the byte stream interface can be plugged into Top
+trait HasStreamIO extends Module {
   val io = IO(new StreamIO)
+}
 
+// simple passthrough core for the walking skeleton (issue #8)
+class PassthroughCore extends HasStreamIO {
   // just wire everything directly
   // this connects bits valid and ready automatically
   io.out <> io.in
-}
-trait HasStreamIO extends Module {
-  val io = IO(new Bundle {
-    val in = Flipped(Decoupled(UInt(8.W)))
-    val out = Decoupled(UInt(8.W))
-  })
 }
