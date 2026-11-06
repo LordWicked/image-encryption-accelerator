@@ -6,8 +6,17 @@ import os.Source.WritableSource
 
 // top level of the MVP (issue #26): bytes -> Packer -> Ascon -> Unpacker -> bytes
 // no UART yet, the image is streamed in simulation by Main
-// numBlocks = image bytes / 16, so 256 for a 64x64 grayscale image
-class Top(numBlocks: Int = 256) extends Module {
+// generated for one image format: width x height pixels of channels bytes
+// (1 = grayscale, 3 = RGB), the core itself only sees the number of blocks
+class Top(width: Int = 64, height: Int = 64, channels: Int = 1) extends Module {
+  require(width > 0 && height > 0, s"invalid image size ${width}x$height")
+  require(channels == 1 || channels == 3, s"channels must be 1 (grayscale) or 3 (RGB), got $channels")
+
+  // the core has no padding yet, so the image must fill whole 16 byte blocks
+  val imageBytes = width * height * channels
+  require(imageBytes % 16 == 0, s"a ${width}x$height image with $channels channel(s) is $imageBytes bytes, not a multiple of 16")
+  val numBlocks = imageBytes / 16
+
   val io = IO(new Bundle {
     // one pulse starts a new encryption with this key and nonce
     val start = Input(Bool())
