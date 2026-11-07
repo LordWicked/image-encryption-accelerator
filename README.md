@@ -45,24 +45,31 @@ Tag `a28657f6e82fe53d08b09eff9330bd2b` (for plaintext bytes `00 … 1f`):
     beats   = [int.from_bytes(block[i:i + 8], "little") for i in (0, 8)]
 ## Running the pipeline
 
-Needs Python with Pillow (`pip install pillow`).
-
 ```
 sbt run                                 # uses assets/128x128-pixel-art.jpg, 256x256 RGB
 sbt "run path/to/image.png"             # any other image, 256x256 RGB
 sbt "run path/to/image.png 128 96 rgb"  # width, height and gray or rgb
 sbt "run path/to/image.png 64 64 gray"  # the MVP format, the fastest to simulate
+sbt "run a.png,b.png 128 128 rgb"       # several images at the same time
 ```
 
-The hardware is generated for one image format: `Top(width, height, channels)`,
-with 1 channel for grayscale and 3 for RGB (bytes R, G, B of each pixel, in the
-same 8-bit stream). The core has no padding yet, so `width * height * channels`
-must be a multiple of 16 bytes. Any size with both sides a multiple of 4 works.
+The hardware is generated for one image format and number of images:
+`Top(width, height, channels, numImages)`, with 1 channel for grayscale and 3 for
+RGB. Its input is always one 24-bit RGB pixel per transfer. `PixelFormatter` turns
+it into the bytes R, G, B or into one grayscale byte. The core has no padding yet,
+so `width * height * channels` must be a multiple of 16 bytes. Any size with both
+sides a multiple of 4 works.
 
-1. `python/imgtool.py` scales the image to that size and turns it into bytes.
-2. The bytes go through `Top` (Packer -> Ascon -> Unpacker) in simulation,
-   with the fixed MVP key and nonce (bytes `00 01 … 0f`).
+`numImages` gives one independent `ImageLane` per image (PixelFormatter -> Packer
+-> Ascon -> Unpacker), with its own stream and its own nonce, all with the same key.
+
+1. `ImageFile` (on the PC) reads each image and scales it to that size.
+2. The pixels go through `Top` in simulation, with the fixed MVP key and nonce
+   (bytes `00 01 … 0f`). Image `i` uses that nonce + `i`, a nonce must never repeat
+   with the same key.
 3. The ciphertext is turned back into an image, the 16-byte tag is saved apart.
 4. The Verilog of `Top` is written to `generated/Top.sv`.
 
-Results in `output/`: `original.png`, `encrypted.png`, `encrypted.bin` and `tag.bin`.
+Results in `output/`: `original.png`, `image.bin` (the bytes that were encrypted),
+`encrypted.png`, `encrypted.bin` and `tag.bin`. With several images the names end
+in `_0`, `_1`, ...
