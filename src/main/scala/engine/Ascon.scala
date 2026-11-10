@@ -78,15 +78,20 @@ object AsconPermutation {
 
 import AsconState._
 
-class AsconRoundUnit extends Module {
+class AsconRoundUnit (roundsPerCycle: Int) extends Module {
   val io = IO(new RoundIO)
-  io.stateReg_out := AsconPermutation.compute(
-    io.stateReg_in,
-    io.perm_counter_in
-  )
+  io.stateReg_out := (0 until roundsPerCycle).foldLeft(io.stateReg_in) { (s, k) =>
+    AsconPermutation.compute(s, io.perm_counter_in + k.U)
+  }
+  // io.stateReg_out := AsconPermutation.compute(
+  //   io.stateReg_in,
+  //   io.perm_counter_in
+  // )
 }
 
-class Ascon(numBlocks: Int = 1024) extends Module {
+class Ascon(numBlocks: Int = 1024, roundsPerCycle: Int = 1) extends Module {
+  require(Seq(1, 2, 4).contains(roundsPerCycle), "roundsPerCycle must divide 12 and 8")
+  val lastStep = (12 - roundsPerCycle).U
 
   // 1 Phase
   val io = IO(new AsconIO())
@@ -114,7 +119,7 @@ class Ascon(numBlocks: Int = 1024) extends Module {
 
   io.dbg_state := stateReg
 
-  val round = Module(new AsconRoundUnit)
+  val round = Module(new AsconRoundUnit(roundsPerCycle))
   round.io.perm_counter_in := perm_counter
   round.io.stateReg_in := stateReg
   val next = round.io.stateReg_out
@@ -128,12 +133,12 @@ class Ascon(numBlocks: Int = 1024) extends Module {
 
         keyReg := io.key
 
-		stateReg(1) := io.key(63, 0)		//Little endian
-		stateReg(2) := io.key(127, 64)		// --
+        stateReg(1) := io.key(63, 0)		//Little endian
+        stateReg(2) := io.key(127, 64)		// --
 
 
-		stateReg(3) := io.nonce(63, 0)		//Little endian
-		stateReg(4) := io.nonce(127, 64)	// --
+        stateReg(3) := io.nonce(63, 0)		//Little endian
+        stateReg(4) := io.nonce(127, 64)	// --
 
         state := sInit
         perm_counter := 0.U
@@ -145,8 +150,8 @@ class Ascon(numBlocks: Int = 1024) extends Module {
 
     is(sInit) {
       stateReg := next
-      perm_counter := perm_counter + 1.U
-      when(perm_counter === 11.U) {
+      perm_counter := perm_counter + roundsPerCycle.U
+      when(perm_counter === lastStep) {
         stateReg(3) := next(3) ^ keyReg(63, 0)
         stateReg(4) := next(4) ^ keyReg(127, 64) ^ AsconCons.DOMAIN_SEP
         state := sWaitPixel
@@ -173,8 +178,8 @@ class Ascon(numBlocks: Int = 1024) extends Module {
 
     is(sPermute) {
       stateReg := next
-      perm_counter := perm_counter + 1.U
-      when(perm_counter === 11.U) {
+      perm_counter := perm_counter + roundsPerCycle.U
+      when(perm_counter === lastStep) {
         when(lastBlock) {
           state := sPad
         }.otherwise {
@@ -193,8 +198,8 @@ class Ascon(numBlocks: Int = 1024) extends Module {
 
     is(sFinal) {
       stateReg := next
-      perm_counter := perm_counter + 1.U
-      when(perm_counter === 11.U) {
+      perm_counter := perm_counter + roundsPerCycle.U
+      when(perm_counter === lastStep) {
         stateReg(3) := next(3) ^ keyReg(63, 0) 		//tag = x3||x4 ^ key
         stateReg(4) := next(4) ^ keyReg(127, 64)
         state := sTag

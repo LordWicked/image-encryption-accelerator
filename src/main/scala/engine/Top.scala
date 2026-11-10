@@ -7,7 +7,7 @@ import chisel3.util._
 // no UART yet, the image is streamed in simulation by Main
 // generated for one image format: width x height pixels of channels bytes
 // (1 = grayscale, 3 = RGB), the core itself only sees the number of blocks
-class Top(width: Int = 64, height: Int = 64, channels: Int = 1) extends Module {
+class Top(width: Int = 64, height: Int = 64, channels: Int = 1, roundsPerCycle: Int = 1) extends Module {
   require(width > 0 && height > 0, s"invalid image size ${width}x$height")
   require(channels == 1 || channels == 3, s"channels must be 1 (grayscale) or 3 (RGB), got $channels")
 
@@ -30,7 +30,7 @@ class Top(width: Int = 64, height: Int = 64, channels: Int = 1) extends Module {
   val formatter = Module(new PixelFormatter(channels))
 
   // the packers group the bytes into the blocks the Ascon core works on
-  val ascon = Module(new Ascon(numBlocks))
+  val ascon = Module(new Ascon(numBlocks, roundsPerCycle))
   val nBytes = ascon.io.pixels_in.bits.getWidth / 8
   val packer = Module(new Packer(nBytes))
   val unpacker = Module(new Unpacker(nBytes))

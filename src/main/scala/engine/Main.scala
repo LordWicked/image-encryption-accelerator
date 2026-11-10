@@ -19,6 +19,7 @@ object Main extends App {
   val mode = if (args.length > 3) args(3) else "rgb"
   require(mode == "gray" || mode == "rgb", s"mode must be gray or rgb, got $mode")
   val channels = if (mode == "rgb") 3 else 1
+  val roundsPerCycle = if (args.length > 4) args(4).toInt else 1
   val outDir = "output"
   new File(outDir).mkdirs()
 
@@ -38,7 +39,7 @@ object Main extends App {
 
   // 2. stream the pixels through the hardware
   val result = ArrayBuffer[Int]()
-  RawTester.test(new Top(width, height, channels)) { dut =>
+  RawTester.test(new Top(width, height, channels, roundsPerCycle)) { dut =>
     dut.io.key.poke(key.U(128.W))
     dut.io.nonce.poke(nonce.U(128.W))
     dut.io.start.poke(true.B)
