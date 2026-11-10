@@ -22,37 +22,41 @@ class RoundTrip extends Module {
 }
 
 class PackerUnpackerSpec extends AnyFlatSpec with ChiselScalatestTester {
-  "Packer and Unpacker" should "pass a round trip test of 16 bytes" in {
-    test(new RoundTrip).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+  val roundsPerCycleConfigs = Seq(1, 2, 4)
 
-      // setup initial states
-      dut.io.in.valid.poke(false.B)
-      dut.io.out.ready.poke(false.B)
-      dut.clock.step(1)
+  for (r <- roundsPerCycleConfigs) {
+    "Packer and Unpacker" should s"pass a round trip test of 16 bytes (roundsPerCycle = $r)" in {
+      test(new RoundTrip).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
 
-      // receiver is always ready to get data
-      dut.io.out.ready.poke(true.B)
-
-      // send 16 distinct bytes into the pipeline
-      for (i <- 1 to 16) {
-        dut.io.in.valid.poke(true.B)
-        dut.io.in.bits.poke(i.U)
+        // setup initial states
+        dut.io.in.valid.poke(false.B)
+        dut.io.out.ready.poke(false.B)
         dut.clock.step(1)
-      }
 
-      // stop sending data
-      dut.io.in.valid.poke(false.B)
+        // receiver is always ready to get data
+        dut.io.out.ready.poke(true.B)
 
-      // now read the 16 bytes coming out and check if they match
-      for (i <- 1 to 16) {
-        // wait until valid data pops out
-        while (!dut.io.out.valid.peek().litToBoolean) {
+        // send 16 distinct bytes into the pipeline
+        for (i <- 1 to 16) {
+          dut.io.in.valid.poke(true.B)
+          dut.io.in.bits.poke(i.U)
           dut.clock.step(1)
         }
 
-        // expect the exact same byte we sent
-        dut.io.out.bits.expect(i.U)
-        dut.clock.step(1)
+        // stop sending data
+        dut.io.in.valid.poke(false.B)
+
+        // now read the 16 bytes coming out and check if they match
+        for (i <- 1 to 16) {
+          // wait until valid data pops out
+          while (!dut.io.out.valid.peek().litToBoolean) {
+            dut.clock.step(1)
+          }
+
+          // expect the exact same byte we sent
+          dut.io.out.bits.expect(i.U)
+          dut.clock.step(1)
+        }
       }
     }
   }

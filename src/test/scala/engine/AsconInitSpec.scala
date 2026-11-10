@@ -36,6 +36,8 @@ class AsconInitSpec extends AnyFlatSpec with ChiselScalatestTester {
   import AsconInitVectors._
   import AsconTestUtil.hex
 
+  val roundsPerCycleConfigs = Seq(1, 2, 4)
+
   def state(dut: Ascon): Seq[BigInt] = dut.io.dbg_state.map(_.peek().litValue)
 
   def check(dut: Ascon, expected: Seq[BigInt], what: String): Unit = {
@@ -43,34 +45,36 @@ class AsconInitSpec extends AnyFlatSpec with ChiselScalatestTester {
     assert(got == expected, s"$what\n  got      ${hex(got)}\n  expected ${hex(expected)}")
   }
 
-  "Ascon sInit" should "produce the reference state after initialization" in {
-    test(new Ascon()) { dut =>
-      dut.io.pixels_in.valid.poke(false.B)
-      dut.io.enc_pixels_out.ready.poke(false.B)
+  for (r <- roundsPerCycleConfigs) {
+    "Ascon sInit" should s"produce the reference state after initialization (roundsPerCycle = $r)" in {
+      test(new Ascon()) { dut =>
+        dut.io.pixels_in.valid.poke(false.B)
+        dut.io.enc_pixels_out.ready.poke(false.B)
 
-      // Cycle 0: start pulse, the core loads IV, key and nonce at the clock edge
-      dut.io.key.poke(toCoreInput(keyBytes).U(128.W))
-      dut.io.nonce.poke(toCoreInput(nonceBytes).U(128.W))
-      dut.io.start.poke(true.B)
-      dut.clock.step(1)
-      dut.io.start.poke(false.B)
-      check(dut, loaded, "after loading (IV, key/nonce byte order)")
+        // Cycle 0: start pulse, the core loads IV, key and nonce at the clock edge
+        dut.io.key.poke(toCoreInput(keyBytes).U(128.W))
+        dut.io.nonce.poke(toCoreInput(nonceBytes).U(128.W))
+        dut.io.start.poke(true.B)
+        dut.clock.step(1)
+        dut.io.start.poke(false.B)
+        check(dut, loaded, "after loading (IV, key/nonce byte order)")
 
-      // Change the inputs: the core must keep using keyReg from now on
-      dut.io.key.poke(0.U)
-      dut.io.nonce.poke(0.U)
+        // Change the inputs: the core must keep using keyReg from now on
+        dut.io.key.poke(0.U)
+        dut.io.nonce.poke(0.U)
 
-      // Round 0 of p12: narrows down a failure to the round logic or the counter
-      dut.clock.step(1)
-      check(dut, afterRound0, "after round 0")
+        // Round 0 of p12: narrows down a failure to the round logic or the counter
+        dut.clock.step(1)
+        check(dut, afterRound0, "after round 0")
 
-      // Remaining 11 rounds, then key XOR and domain separation
-      dut.clock.step(11)
-      check(dut, afterInit, "after initialization (p12, key, domain separation)")
+        // Remaining 11 rounds, then key XOR and domain separation
+        dut.clock.step(11)
+        check(dut, afterInit, "after initialization (p12, key, domain separation)")
 
-      // The FSM has left sInit, so the state must stay unchanged
-      dut.clock.step(3)
-      check(dut, afterInit, "state changed after init, FSM did not leave sInit")
+        // The FSM has left sInit, so the state must stay unchanged
+        dut.clock.step(3)
+        check(dut, afterInit, "state changed after init, FSM did not leave sInit")
+      }
     }
   }
 }

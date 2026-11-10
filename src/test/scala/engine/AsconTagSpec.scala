@@ -19,6 +19,8 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
   import AsconTagVectors._
   import AsconTestUtil.hex
 
+  val roundsPerCycleConfigs = Seq(1, 2, 4)
+
   def check(dut: Ascon, expected: Seq[BigInt], what: String): Unit = {
     val got = dut.io.dbg_state.map(_.peek().litValue)
     assert(got == expected, s"$what\n  got      ${hex(got)}\n  expected ${hex(expected)}")
@@ -82,13 +84,15 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
     dut.clock.step(1)
   }
 
-  "Ascon" should "produce the reference tag, also for a second image after the first" in {
-    test(new Ascon(numBlocks = 2)) { dut =>
-      // Run 1: normal encryption
-      encryptAndCheckTag(dut, run = 1)
-      // Run 2: same inputs again. Only passes if blockCount and lastBlock
-      // were reset correctly after the first image.
-      encryptAndCheckTag(dut, run = 2)
+  for (r <- roundsPerCycleConfigs) {
+    "Ascon" should s"produce the reference tag, also for a second image after the first (roundsPerCycle = $r)" in {
+      test(new Ascon(numBlocks = 2)) { dut =>
+        // Run 1: normal encryption
+        encryptAndCheckTag(dut, run = 1)
+        // Run 2: same inputs again. Only passes if blockCount and lastBlock
+        // were reset correctly after the first image.
+        encryptAndCheckTag(dut, run = 2)
+      }
     }
   }
 }

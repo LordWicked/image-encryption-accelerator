@@ -67,6 +67,7 @@ object AsconTestUtil {
 // ---------------------------------------------------------------------------
 class AsconPermutationSpec extends AnyFlatSpec with ChiselScalatestTester {
   import AsconTestUtil._
+  val roundsPerCycleConfigs = Seq(1, 2, 4)
 
   def pokeState(port: Vec[UInt], s: Seq[BigInt]): Unit =
     port.zip(s).foreach { case (p, v) => p.poke(v.U(64.W)) }
@@ -74,60 +75,65 @@ class AsconPermutationSpec extends AnyFlatSpec with ChiselScalatestTester {
   def peekState(port: Vec[UInt]): Seq[BigInt] =
     port.map(_.peek().litValue)
 
-  "constantAddition" should "XOR the round constant into x2 and nothing else" in {
-    test(new RoundHarness((s, rc) => AsconPermutation.constantAddition(rc, s))) { dut =>
-      for (i <- 0 until 12) {
-        val expectedConst = ((15 - i) << 4) | i // independent of the AsconCons table
-        pokeState(dut.io.in, Seq.fill(5)(BigInt(0)))
-        dut.io.rc.poke(i.U)
-        val out = peekState(dut.io.out)
-        assert(out == Seq(0, 0, expectedConst, 0, 0).map(BigInt(_)), s"round $i: ${hex(out)}")
-      }
-    }
-  }
-
-  "substitutionLayer" should "match the S-box table in every bit column" in {
-    test(new LayerHarness(AsconPermutation.substitutionLayer)) { dut =>
-      // 32 passes: in each pass every column gets a different input value,
-      // and over all passes every column sees all 32 values.
-      for (offset <- 0 until 32) {
-        val col = (j: Int) => (j + offset) % 32
-        pokeState(dut.io.in, columnsToWords(col))
-        val out = peekState(dut.io.out)
-        for (j <- 0 until 64) {
-          val got = wordsToColumn(out, j)
-          val exp = sBoxRef(col(j))
-          assert(got == exp, f"column $j, input 0x${col(j)}%02x: got 0x$got%02x, expected 0x$exp%02x")
+  for (r <- roundsPerCycleConfigs) {
+    "constantAddition" should s"XOR the round constant into x2 and nothing else (roundsPerCycle = $r)" in {
+      test(new RoundHarness((s, rc) => AsconPermutation.constantAddition(rc, s))) { dut =>
+        for (i <- 0 until 12) {
+          val expectedConst = ((15 - i) << 4) | i // independent of the AsconCons table
+          pokeState(dut.io.in, Seq.fill(5)(BigInt(0)))
+          dut.io.rc.poke(i.U)
+          val out = peekState(dut.io.out)
+          assert(out == Seq(0, 0, expectedConst, 0, 0).map(BigInt(_)), s"round $i: ${hex(out)}")
         }
       }
     }
-  }
+  
 
-  "linearDiffusionLayer" should "spread a single bit to exactly three positions in its own word" in {
-    test(new LayerHarness(AsconPermutation.linearDiffusionLayer)) { dut =>
-      for (w <- 0 until 5; b <- 0 until 64) {
-        val in = Seq.tabulate(5)(i => if (i == w) BigInt(0).setBit(b) else BigInt(0))
-        pokeState(dut.io.in, in)
-        val (r1, r2) = rotations(w)
-        val expectedWord = in(w) ^ rotr(in(w), r1) ^ rotr(in(w), r2)
-        val expected = Seq.tabulate(5)(i => if (i == w) expectedWord else BigInt(0))
-        val out = peekState(dut.io.out)
-        assert(out == expected, s"word x$w, bit $b:\n  got      ${hex(out)}\n  expected ${hex(expected)}")
+    "substitutionLayer" should s"match the S-box table in every bit column (roundsPerCycle = $r)" in {
+      test(new LayerHarness(AsconPermutation.substitutionLayer)) { dut =>
+        // 32 passes: in each pass every column gets a different input value,
+        // and over all passes every column sees all 32 values.
+        for (offset <- 0 until 32) {
+          val col = (j: Int) => (j + offset) % 32
+          pokeState(dut.io.in, columnsToWords(col))
+          val out = peekState(dut.io.out)
+          for (j <- 0 until 64) {
+            val got = wordsToColumn(out, j)
+            val exp = sBoxRef(col(j))
+            assert(got == exp, f"column $j, input 0x${col(j)}%02x: got 0x$got%02x, expected 0x$exp%02x")
+          }
+        }
       }
     }
-  }
+  
 
-  // Reference values from pyascon (NIST version), see AsconInitVectors in AsconInitSpec.scala
-  "compute" should "match the reference model for one round" in {
-    val roundIndex = 0
-    val before = AsconInitVectors.loaded
-    val after  = AsconInitVectors.afterRound0
+    "linearDiffusionLayer" should s"spread a single bit to exactly three positions in its own word (roundsPerCycle = $r)" in {
+      test(new LayerHarness(AsconPermutation.linearDiffusionLayer)) { dut =>
+        for (w <- 0 until 5; b <- 0 until 64) {
+          val in = Seq.tabulate(5)(i => if (i == w) BigInt(0).setBit(b) else BigInt(0))
+          pokeState(dut.io.in, in)
+          val (r1, r2) = rotations(w)
+          val expectedWord = in(w) ^ rotr(in(w), r1) ^ rotr(in(w), r2)
+          val expected = Seq.tabulate(5)(i => if (i == w) expectedWord else BigInt(0))
+          val out = peekState(dut.io.out)
+          assert(out == expected, s"word x$w, bit $b:\n  got      ${hex(out)}\n  expected ${hex(expected)}")
+        }
+      }
+    }
+  
 
-    test(new RoundHarness(AsconPermutation.compute)) { dut =>
-      pokeState(dut.io.in, before)
-      dut.io.rc.poke(roundIndex.U)
-      val out = peekState(dut.io.out)
-      assert(out == after, s"\n  got      ${hex(out)}\n  expected ${hex(after)}")
+    // Reference values from pyascon (NIST version), see AsconInitVectors in AsconInitSpec.scala
+    "compute" should s"match the reference model for one round (roundsPerCycle = $r)" in {
+      val roundIndex = 0
+      val before = AsconInitVectors.loaded
+      val after  = AsconInitVectors.afterRound0
+
+      test(new RoundHarness(AsconPermutation.compute)) { dut =>
+        pokeState(dut.io.in, before)
+        dut.io.rc.poke(roundIndex.U)
+        val out = peekState(dut.io.out)
+        assert(out == after, s"\n  got      ${hex(out)}\n  expected ${hex(after)}")
+      }
     }
   }
 }

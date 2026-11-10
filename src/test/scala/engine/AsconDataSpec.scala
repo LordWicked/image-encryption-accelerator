@@ -51,6 +51,8 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
   import AsconDataVectors._
   import AsconTestUtil.hex
 
+  val roundsPerCycleConfigs = Seq(1, 2, 4)
+  
   def state(dut: Ascon): Seq[BigInt] = dut.io.dbg_state.map(_.peek().litValue)
 
   def check(dut: Ascon, expected: Seq[BigInt], what: String): Unit = {
@@ -82,44 +84,47 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
     dut.clock.step(1)
   }
 
-  "Ascon data phase" should "encrypt two blocks like the reference" in {
-    test(new Ascon(numBlocks = 2)) { dut =>
-      initialize(dut)
-      dut.io.enc_pixels_out.ready.poke(true.B)
 
-      // Two cycles without input (valid low): nothing may happen
-      dut.io.pixels_in.valid.poke(false.B)
-      dut.io.enc_pixels_out.valid.expect(false.B, "output valid without input")
-      dut.clock.step(2)
-      check(dut, afterInit, "gap: state changed without input")
+  for (r <- roundsPerCycleConfigs) {
+    "Ascon data phase" should s"encrypt two blocks like the reference (roundsPerCycle = $r)" in {
+      test(new Ascon(numBlocks = 2)) { dut =>
+        initialize(dut)
+        dut.io.enc_pixels_out.ready.poke(true.B)
 
-      // Block 0
-      sendBlock(dut, 0)
-      check(dut, absorbed0, "block 0 absorbed")
+        // Two cycles without input (valid low): nothing may happen
+        dut.io.pixels_in.valid.poke(false.B)
+        dut.io.enc_pixels_out.valid.expect(false.B, "output valid without input")
+        dut.clock.step(2)
+        check(dut, afterInit, "gap: state changed without input")
 
-      // During p8 the core must not accept input
-      dut.io.pixels_in.valid.poke(true.B)
-      dut.io.pixels_in.ready.expect(false.B, "core accepts input during p8")
-      dut.clock.step(8)
-      check(dut, afterP8Block0, "block 0 after p8")
+        // Block 0
+        sendBlock(dut, 0)
+        check(dut, absorbed0, "block 0 absorbed")
 
-      // Block 1, with a two-cycle stall from the receiver (ready low)
-      dut.io.pixels_in.bits.poke(plainBlocks(1).U(128.W))
-      dut.io.enc_pixels_out.ready.poke(false.B)
-      dut.io.pixels_in.ready.expect(false.B, "core accepts input while receiver stalls")
-      dut.clock.step(2)
-      check(dut, afterP8Block0, "stall: state changed although receiver was not ready")
-      dut.io.enc_pixels_out.ready.poke(true.B)
-      sendBlock(dut, 1)
-      check(dut, absorbed1, "block 1 absorbed")
+        // During p8 the core must not accept input
+        dut.io.pixels_in.valid.poke(true.B)
+        dut.io.pixels_in.ready.expect(false.B, "core accepts input during p8")
+        dut.clock.step(8)
+        check(dut, afterP8Block0, "block 0 after p8")
 
-      dut.clock.step(8)
-      check(dut, afterP8Block1, "block 1 after p8 (state before padding)")
+        // Block 1, with a two-cycle stall from the receiver (ready low)
+        dut.io.pixels_in.bits.poke(plainBlocks(1).U(128.W))
+        dut.io.enc_pixels_out.ready.poke(false.B)
+        dut.io.pixels_in.ready.expect(false.B, "core accepts input while receiver stalls")
+        dut.clock.step(2)
+        check(dut, afterP8Block0, "stall: state changed although receiver was not ready")
+        dut.io.enc_pixels_out.ready.poke(true.B)
+        sendBlock(dut, 1)
+        check(dut, absorbed1, "block 1 absorbed")
 
-      // Block 1 was the last one (numBlocks = 2): the core must go to sPad,
-      // not back to sWaitPixel, so it must not accept more pixels
-      dut.io.pixels_in.valid.poke(true.B)
-      dut.io.pixels_in.ready.expect(false.B, "core waits for pixels after the last block, lastBlock not set")
+        dut.clock.step(8)
+        check(dut, afterP8Block1, "block 1 after p8 (state before padding)")
+
+        // Block 1 was the last one (numBlocks = 2): the core must go to sPad,
+        // not back to sWaitPixel, so it must not accept more pixels
+        dut.io.pixels_in.valid.poke(true.B)
+        dut.io.pixels_in.ready.expect(false.B, "core waits for pixels after the last block, lastBlock not set")
+      }
     }
   }
 }
