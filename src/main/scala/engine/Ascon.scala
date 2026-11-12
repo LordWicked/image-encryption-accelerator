@@ -83,10 +83,6 @@ class AsconRoundUnit (roundsPerCycle: Int) extends Module {
   io.stateReg_out := (0 until roundsPerCycle).foldLeft(io.stateReg_in) { (s, k) =>
     AsconPermutation.compute(s, io.perm_counter_in + k.U)
   }
-  // io.stateReg_out := AsconPermutation.compute(
-  //   io.stateReg_in,
-  //   io.perm_counter_in
-  // )
 }
 
 class Ascon(numBlocks: Int = 1024, roundsPerCycle: Int = 1) extends Module {

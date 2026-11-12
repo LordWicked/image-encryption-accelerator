@@ -64,7 +64,7 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
       "96d53cd55b00b93a7a9e98c7e5603c99c56ea022f56c3ef96e9383c9b32636f393c8b22a45c4999e09a77833b5599ade" +
       "2fbaf7a37eb7d019ba6b79dd7f583d39")
   )
-  
+
   // two 4x4 grayscale images and their ciphertext + tag from pyascon, with the nonces 00 .. 0f and that + 1
   val twoImages = Seq(Seq.tabulate(16)(i => i), Seq.tabulate(16)(i => 255 - i))
   val twoReferences = Seq(
@@ -75,7 +75,7 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
   for (r <- roundsPerCycleConfigs) {
     "Top" should s"generate Verilog (roundsPerCycle = $r)" in {
       // fails if any wire in the design is left without a value
-      val verilog = ChiselStage.emitSystemVerilog(new Top())
+      val verilog = ChiselStage.emitSystemVerilog(new Top(roundsPerCycle = r))
       assert(verilog.contains("module Top"))
     }
 
@@ -88,46 +88,60 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
         blocks.flatMap(b => (0 until 16).map(i => ((b >> (8 * i)) & 0xff).toInt))
       val expected = toBytes(cipherBlocks) ++ toBytes(Seq(tag))
 
-      test(new Top(width = 8, height = 4)) { dut =>
+      test(new Top(width = 8, height = 4, roundsPerCycle = r)) { dut =>
         val result = encrypt(dut, toBytes(plainBlocks), channels = 1)
         assert(result == expected, s"\n  got      ${hex(result)}\n  expected ${hex(expected)}")
       }
     }
 
+    for ((width, height, channels, reference) <- references) {
+      it should s"encrypt a ${width}x$height image with $channels channel(s) like the reference (roundsPerCycle = $r)" in {
+        val plain = Seq.tabulate(width * height * channels)(_ % 256)
+        val expected = reference.grouped(2).map(Integer.parseInt(_, 16)).toSeq
+
+        test(new Top(width, height, channels, roundsPerCycle = r)) { dut =>
+          val result = encrypt(dut, plain, channels)
+          assert(result == expected, s"\n  got      ${hex(result)}\n  expected ${hex(expected)}")
+        }
+      }
+    }
 
     it should s"encrypt two images at the same time like the reference (roundsPerCycle = $r)" in {
-      test(new Top(4, 4, 1, numImages = 2)) { dut =>
+      test(new Top(4, 4, 1, numImages = 2, roundsPerCycle = r)) { dut =>
         val results = encryptAll(dut, twoImages, 1, stall = Seq(0, 0))
         assert(results == twoReferences, s"\n  got      ${results.map(hex)}\n  expected ${twoReferences.map(hex)}")
       }
     }
 
     it should s"keep the lanes independent when one output stops (roundsPerCycle = $r)" in {
-      test(new Top(4, 4, 1, numImages = 2)) { dut =>
+      test(new Top(4, 4, 1, numImages = 2, roundsPerCycle = r)) { dut =>
         assert(encryptAll(dut, twoImages, 1, stall = Seq(0, 100)) == twoReferences)
       }
     }
 
-    it should s"generate one lane for each image (roundsPerCycle = $r)" in {
-      for (numImages <- Seq(1, 2, 3)) {
-        val verilog = ChiselStage.emitSystemVerilog(new Top(8, 4, 1, numImages))
-        assert("ImageLane \\w+ \\(".r.findAllIn(verilog).length == numImages)
-      }
-    }
 
-    it should s"emit a different circuit for grayscale and RGB (roundsPerCycle = $r)" in {
-      val gray = ChiselStage.emitSystemVerilog(new Top(8, 4, 1))
-      val rgb = ChiselStage.emitSystemVerilog(new Top(8, 4, 3))
-      assert(gray != rgb)
-      assert(gray.contains("[23:0]") && rgb.contains("[23:0]"))
-    }
 
-    it should s"refuse image formats it can not generate (roundsPerCycle = $r)" in {
-      // 900 bytes, not a multiple of 16
-      intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(30, 30, 1)) }
-      intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(64, 64, 2)) }
-      intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(0, 64, 1)) }
-      intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(64, 64, 1, numImages = 0)) }
+  }
+
+  it should s"generate one lane for each image" in {
+    for (numImages <- Seq(1, 2, 3)) {
+      val verilog = ChiselStage.emitSystemVerilog(new Top(8, 4, 1, numImages))
+      assert("ImageLane \\w+ \\(".r.findAllIn(verilog).length == numImages)
     }
+  }
+
+  it should s"emit a different circuit for grayscale and RGB" in {
+    val gray = ChiselStage.emitSystemVerilog(new Top(8, 4, 1))
+    val rgb = ChiselStage.emitSystemVerilog(new Top(8, 4, 3))
+    assert(gray != rgb)
+    assert(gray.contains("[23:0]") && rgb.contains("[23:0]"))
+  }
+
+  it should s"refuse image formats it can not generate" in {
+    // 900 bytes, not a multiple of 16
+    intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(30, 30, 1)) }
+    intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(64, 64, 2)) }
+    intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(0, 64, 1)) }
+    intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(64, 64, 1, numImages = 0)) }
   }
 }

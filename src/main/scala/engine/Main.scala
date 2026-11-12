@@ -51,7 +51,7 @@ object Main extends App {
 
   // 2. stream the pixels through the hardware
   val results = Seq.fill(numImages)(ArrayBuffer[Int]())
-  RawTester.test(new Top(width, height, channels, roundsPerCycle, numImages)) { dut =>
+  RawTester.test(new Top(width, height, channels, numImages, roundsPerCycle)) { dut =>
     dut.io.key.poke(key.U(128.W))
     for (i <- 0 until numImages) dut.io.nonce(i).poke(nonces(i).U(128.W))
     dut.io.start.poke(true.B)
@@ -92,7 +92,7 @@ object Main extends App {
 
   // 4. Verilog for Vivado
   ChiselStage.emitSystemVerilogFile(
-    new Top(width, height, channels, numImages),
+    new Top(width, height, channels, numImages, roundsPerCycle),
     args = Array("--target-dir", "generated"),
     // cleaner Verilog: no random init blocks and no debug comments
     firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")

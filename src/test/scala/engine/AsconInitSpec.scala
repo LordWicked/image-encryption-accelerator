@@ -26,6 +26,14 @@ object AsconInitVectors {
   val afterInit = Seq(w("e94ca1d68ad071e7"), w("ec7a5fc285aed974"), w("afe01d6bf4bcb26c"),
                       w("9216fd8172857e38"), w("f86a1691b9b11607"))
 
+  val afterFirstCycle = Map(
+    1 -> afterRound0,
+    2 -> Seq(w("598480107f8ff163"), w("5133cf3bb96bf3e1"), w("daf7ad1230bbb157"),
+             w("b5f0a080ae6ea331"), w("631a693d2e994514")),
+    4 -> Seq(w("0abc2a2b826f05a6"), w("097aa44dcfcbdfea"), w("2a712ccefcef0e77"),
+             w("83811dd4eae3d397"), w("8628dabba92f6355"))
+  )
+
   /** Byte-order convention: 16 bytes -> two little-endian 64-bit words, first word on top.
     * This is how the testbench / packer hands key and nonce to the core.
     */
@@ -38,6 +46,7 @@ class AsconInitSpec extends AnyFlatSpec with ChiselScalatestTester {
 
   val roundsPerCycleConfigs = Seq(1, 2, 4)
 
+
   def state(dut: Ascon): Seq[BigInt] = dut.io.dbg_state.map(_.peek().litValue)
 
   def check(dut: Ascon, expected: Seq[BigInt], what: String): Unit = {
@@ -47,7 +56,7 @@ class AsconInitSpec extends AnyFlatSpec with ChiselScalatestTester {
 
   for (r <- roundsPerCycleConfigs) {
     "Ascon sInit" should s"produce the reference state after initialization (roundsPerCycle = $r)" in {
-      test(new Ascon()) { dut =>
+      test(new Ascon(roundsPerCycle = r)) { dut =>
         dut.io.pixels_in.valid.poke(false.B)
         dut.io.enc_pixels_out.ready.poke(false.B)
 
@@ -63,12 +72,12 @@ class AsconInitSpec extends AnyFlatSpec with ChiselScalatestTester {
         dut.io.key.poke(0.U)
         dut.io.nonce.poke(0.U)
 
-        // Round 0 of p12: narrows down a failure to the round logic or the counter
+        // First rounds of p12: narrows down a failure to the round logic or the counter
         dut.clock.step(1)
-        check(dut, afterRound0, "after round 0")
+        check(dut, afterFirstCycle(r), s"after the first cycle ($r round(s))")
 
-        // Remaining 11 rounds, then key XOR and domain separation
-        dut.clock.step(11)
+        // Remaining rounds, then key XOR and domain separation
+        dut.clock.step(12 / r - 1)
         check(dut, afterInit, "after initialization (p12, key, domain separation)")
 
         // The FSM has left sInit, so the state must stay unchanged

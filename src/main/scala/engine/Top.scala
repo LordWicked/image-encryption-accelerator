@@ -2,7 +2,6 @@ package engine
 
 import chisel3._
 import chisel3.util._
-import engine.Main.roundsPerCycle
 
 // one encryption lane: RGB pixels -> PixelFormatter -> Packer -> Ascon -> Unpacker -> bytes
 class ImageLane(numBlocks: Int, channels: Int, roundsPerCycle: Int) extends Module {
@@ -39,7 +38,7 @@ class ImageLane(numBlocks: Int, channels: Int, roundsPerCycle: Int) extends Modu
 // no UART yet, the images are streamed in simulation by Main
 // generated for one image format: width x height pixels of channels bytes
 // (1 = grayscale, 3 = RGB), the core itself only sees the number of blocks
-class Top(width: Int = 64, height: Int = 64, channels: Int = 1, roundsPerCycle: Int = 1, numImages: Int = 1) extends Module {
+class Top(width: Int = 64, height: Int = 64, channels: Int = 1, numImages: Int = 1, roundsPerCycle: Int = 1) extends Module {
   require(width > 0 && height > 0, s"invalid image size ${width}x$height")
   require(channels == 1 || channels == 3, s"channels must be 1 (grayscale) or 3 (RGB), got $channels")
   require(numImages > 0, s"numImages must be at least 1, got $numImages")

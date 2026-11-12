@@ -61,7 +61,7 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   /** Runs start + initialization, leaves the core in sWaitPixel. */
-  def initialize(dut: Ascon): Unit = {
+  def initialize(dut: Ascon, r: Int): Unit = {
     dut.io.pixels_in.valid.poke(false.B)
     dut.io.enc_pixels_out.ready.poke(false.B)
     dut.io.key.poke(toCoreInput(keyBytes).U(128.W))
@@ -69,7 +69,7 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
     dut.io.start.poke(true.B)
     dut.clock.step(1)
     dut.io.start.poke(false.B)
-    dut.clock.step(12)
+    dut.clock.step(12 / r)
     check(dut, afterInit, "after initialization")
   }
 
@@ -87,8 +87,8 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
 
   for (r <- roundsPerCycleConfigs) {
     "Ascon data phase" should s"encrypt two blocks like the reference (roundsPerCycle = $r)" in {
-      test(new Ascon(numBlocks = 2)) { dut =>
-        initialize(dut)
+      test(new Ascon(numBlocks = 2, roundsPerCycle = r)) { dut =>
+        initialize(dut, r)
         dut.io.enc_pixels_out.ready.poke(true.B)
 
         // Two cycles without input (valid low): nothing may happen
@@ -104,7 +104,7 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
         // During p8 the core must not accept input
         dut.io.pixels_in.valid.poke(true.B)
         dut.io.pixels_in.ready.expect(false.B, "core accepts input during p8")
-        dut.clock.step(8)
+        dut.clock.step(8 / r)
         check(dut, afterP8Block0, "block 0 after p8")
 
         // Block 1, with a two-cycle stall from the receiver (ready low)
@@ -117,7 +117,7 @@ class AsconDataSpec extends AnyFlatSpec with ChiselScalatestTester {
         sendBlock(dut, 1)
         check(dut, absorbed1, "block 1 absorbed")
 
-        dut.clock.step(8)
+        dut.clock.step(8 / r)
         check(dut, afterP8Block1, "block 1 after p8 (state before padding)")
 
         // Block 1 was the last one (numBlocks = 2): the core must go to sPad,
