@@ -19,6 +19,8 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
   import AsconTagVectors._
   import AsconTestUtil.hex
 
+  val roundsPerCycleConfigs = Seq(1, 2, 4)
+
   def check(dut: Ascon, expected: Seq[BigInt], what: String): Unit = {
     val got = dut.io.dbg_state.map(_.peek().litValue)
     assert(got == expected, s"$what\n  got      ${hex(got)}\n  expected ${hex(expected)}")
@@ -31,7 +33,7 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   /** One full encryption of the two reference blocks, from start pulse to tag. */
-  def encryptAndCheckTag(dut: Ascon, run: Int): Unit = {
+  def encryptAndCheckTag(dut: Ascon, run: Int, r: Int): Unit = {
     // Start and initialization
     dut.io.pixels_in.valid.poke(false.B)
     dut.io.enc_pixels_out.ready.poke(false.B)
@@ -40,7 +42,7 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
     dut.io.start.poke(true.B)
     dut.clock.step(1)
     dut.io.start.poke(false.B)
-    dut.clock.step(12)
+    dut.clock.step(12 / r)
     check(dut, afterInit, s"run $run: after initialization")
 
     // Two blocks of pixels, each followed by p8
@@ -52,13 +54,13 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
       expectOut(dut, cipherBlocks(i), s"run $run, ciphertext block $i")
       dut.clock.step(1)
       dut.io.pixels_in.valid.poke(false.B)
-      dut.clock.step(8)
+      dut.clock.step(8 / r)
     }
     check(dut, afterP8Block1, s"run $run: state before padding")
 
     // sPad (1 cycle) and sFinal (12 cycles), no output in between
     dut.io.enc_pixels_out.ready.poke(false.B)
-    for (c <- 0 until 13) {
+    for (c <- 0 until 1 + 12 / r) {
       dut.io.enc_pixels_out.valid.expect(false.B, s"run $run: output valid during padding/finalization (cycle $c)")
       dut.clock.step(1)
     }
@@ -82,13 +84,15 @@ class AsconTagSpec extends AnyFlatSpec with ChiselScalatestTester {
     dut.clock.step(1)
   }
 
-  "Ascon" should "produce the reference tag, also for a second image after the first" in {
-    test(new Ascon(numBlocks = 2)) { dut =>
-      // Run 1: normal encryption
-      encryptAndCheckTag(dut, run = 1)
-      // Run 2: same inputs again. Only passes if blockCount and lastBlock
-      // were reset correctly after the first image.
-      encryptAndCheckTag(dut, run = 2)
+  for (r <- roundsPerCycleConfigs) {
+    "Ascon" should s"produce the reference tag, also for a second image after the first (roundsPerCycle = $r)" in {
+      test(new Ascon(numBlocks = 2, roundsPerCycle = r)) { dut =>
+        // Run 1: normal encryption
+        encryptAndCheckTag(dut, run = 1, r)
+        // Run 2: same inputs again. Only passes if blockCount and lastBlock
+        // were reset correctly after the first image.
+        encryptAndCheckTag(dut, run = 2, r)
+      }
     }
   }
 }

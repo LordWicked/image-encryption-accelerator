@@ -9,6 +9,8 @@ import scala.collection.mutable.ArrayBuffer
 class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
   import AsconInitVectors._
 
+  val roundsPerCycleConfigs = Seq(1, 2, 4)
+
   // the RGB pixels that give these plaintext bytes: 3 bytes per pixel in RGB,
   // and R = G = B in grayscale, which the formatter keeps as the same byte
   def toPixels(plain: Seq[Int], channels: Int): Seq[Int] =
@@ -50,27 +52,6 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
 
   def hex(bytes: Seq[Int]): String = bytes.map(b => f"$b%02x").mkString
 
-  "Top" should "generate Verilog" in {
-    // fails if any wire in the design is left without a value
-    val verilog = ChiselStage.emitSystemVerilog(new Top())
-    assert(verilog.contains("module Top"))
-  }
-
-  it should "encrypt a byte stream like the reference" in {
-    import AsconDataVectors._
-    import AsconTagVectors._
-
-    // the same 2 blocks as AsconDataSpec / AsconTagSpec, but as single bytes
-    def toBytes(blocks: Seq[BigInt]): Seq[Int] =
-      blocks.flatMap(b => (0 until 16).map(i => ((b >> (8 * i)) & 0xff).toInt))
-    val expected = toBytes(cipherBlocks) ++ toBytes(Seq(tag))
-
-    test(new Top(width = 8, height = 4)) { dut =>
-      val result = encrypt(dut, toBytes(plainBlocks), channels = 1)
-      assert(result == expected, s"\n  got      ${hex(result)}\n  expected ${hex(expected)}")
-    }
-  }
-
   // ciphertext + tag from the official Ascon implementation (pyascon), for
   // key = nonce = 00 .. 0f and the plaintext bytes 00 01 02 ...
   val references = Seq(
@@ -84,18 +65,6 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
       "2fbaf7a37eb7d019ba6b79dd7f583d39")
   )
 
-  for ((width, height, channels, reference) <- references) {
-    it should s"encrypt a ${width}x$height image with $channels channel(s) like the reference" in {
-      val plain = Seq.tabulate(width * height * channels)(_ % 256)
-      val expected = reference.grouped(2).map(Integer.parseInt(_, 16)).toSeq
-
-      test(new Top(width, height, channels)) { dut =>
-        val result = encrypt(dut, plain, channels)
-        assert(result == expected, s"\n  got      ${hex(result)}\n  expected ${hex(expected)}")
-      }
-    }
-  }
-
   // two 4x4 grayscale images and their ciphertext + tag from pyascon, with the nonces 00 .. 0f and that + 1
   val twoImages = Seq(Seq.tabulate(16)(i => i), Seq.tabulate(16)(i => 255 - i))
   val twoReferences = Seq(
@@ -103,34 +72,72 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
     "e3e7bc55fbe9e4c44cad03ecb996d27997c261a65f2b9a26d064bfa2ef2d8b2d"
   ).map(_.grouped(2).map(Integer.parseInt(_, 16)).toSeq)
 
-  it should "encrypt two images at the same time like the reference" in {
-    test(new Top(4, 4, 1, numImages = 2)) { dut =>
-      val results = encryptAll(dut, twoImages, 1, stall = Seq(0, 0))
-      assert(results == twoReferences, s"\n  got      ${results.map(hex)}\n  expected ${twoReferences.map(hex)}")
+  for (r <- roundsPerCycleConfigs) {
+    "Top" should s"generate Verilog (roundsPerCycle = $r)" in {
+      // fails if any wire in the design is left without a value
+      val verilog = ChiselStage.emitSystemVerilog(new Top(roundsPerCycle = r))
+      assert(verilog.contains("module Top"))
     }
+
+    it should s"encrypt a byte stream like the reference (roundsPerCycle = $r)" in {
+      import AsconDataVectors._
+      import AsconTagVectors._
+
+      // the same 2 blocks as AsconDataSpec / AsconTagSpec, but as single bytes
+      def toBytes(blocks: Seq[BigInt]): Seq[Int] =
+        blocks.flatMap(b => (0 until 16).map(i => ((b >> (8 * i)) & 0xff).toInt))
+      val expected = toBytes(cipherBlocks) ++ toBytes(Seq(tag))
+
+      test(new Top(width = 8, height = 4, roundsPerCycle = r)) { dut =>
+        val result = encrypt(dut, toBytes(plainBlocks), channels = 1)
+        assert(result == expected, s"\n  got      ${hex(result)}\n  expected ${hex(expected)}")
+      }
+    }
+
+    for ((width, height, channels, reference) <- references) {
+      it should s"encrypt a ${width}x$height image with $channels channel(s) like the reference (roundsPerCycle = $r)" in {
+        val plain = Seq.tabulate(width * height * channels)(_ % 256)
+        val expected = reference.grouped(2).map(Integer.parseInt(_, 16)).toSeq
+
+        test(new Top(width, height, channels, roundsPerCycle = r)) { dut =>
+          val result = encrypt(dut, plain, channels)
+          assert(result == expected, s"\n  got      ${hex(result)}\n  expected ${hex(expected)}")
+        }
+      }
+    }
+
+    it should s"encrypt two images at the same time like the reference (roundsPerCycle = $r)" in {
+      test(new Top(4, 4, 1, numImages = 2, roundsPerCycle = r)) { dut =>
+        val results = encryptAll(dut, twoImages, 1, stall = Seq(0, 0))
+        assert(results == twoReferences, s"\n  got      ${results.map(hex)}\n  expected ${twoReferences.map(hex)}")
+      }
+    }
+
+    it should s"keep the lanes independent when one output stops (roundsPerCycle = $r)" in {
+      test(new Top(4, 4, 1, numImages = 2, roundsPerCycle = r)) { dut =>
+        assert(encryptAll(dut, twoImages, 1, stall = Seq(0, 100)) == twoReferences)
+      }
+    }
+
+
+
   }
 
-  it should "keep the lanes independent when one output stops" in {
-    test(new Top(4, 4, 1, numImages = 2)) { dut =>
-      assert(encryptAll(dut, twoImages, 1, stall = Seq(0, 100)) == twoReferences)
-    }
-  }
-
-  it should "generate one lane for each image" in {
+  it should s"generate one lane for each image" in {
     for (numImages <- Seq(1, 2, 3)) {
       val verilog = ChiselStage.emitSystemVerilog(new Top(8, 4, 1, numImages))
       assert("ImageLane \\w+ \\(".r.findAllIn(verilog).length == numImages)
     }
   }
 
-  it should "emit a different circuit for grayscale and RGB" in {
+  it should s"emit a different circuit for grayscale and RGB" in {
     val gray = ChiselStage.emitSystemVerilog(new Top(8, 4, 1))
     val rgb = ChiselStage.emitSystemVerilog(new Top(8, 4, 3))
     assert(gray != rgb)
     assert(gray.contains("[23:0]") && rgb.contains("[23:0]"))
   }
 
-  it should "refuse image formats it can not generate" in {
+  it should s"refuse image formats it can not generate" in {
     // 900 bytes, not a multiple of 16
     intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(30, 30, 1)) }
     intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(64, 64, 2)) }

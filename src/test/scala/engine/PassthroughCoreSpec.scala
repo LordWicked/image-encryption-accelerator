@@ -5,7 +5,8 @@ import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 
 class PassthroughCoreSpec extends AnyFlatSpec with ChiselScalatestTester {
-  "PassthroughCore" should "pass data and respect backpressure" in {
+  
+  "PassthroughCore" should s"pass data and respect backpressure" in {
     test(new PassthroughCore) { dut =>
 
       // initial state no one sending and no one ready
@@ -35,4 +36,4 @@ class PassthroughCoreSpec extends AnyFlatSpec with ChiselScalatestTester {
       dut.clock.step(1)
     }
   }
-}
+  }

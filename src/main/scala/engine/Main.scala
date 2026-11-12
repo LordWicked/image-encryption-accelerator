@@ -20,6 +20,7 @@ object Main extends App {
   val mode = if (args.length > 3) args(3) else "rgb"
   require(mode == "gray" || mode == "rgb", s"mode must be gray or rgb, got $mode")
   val channels = if (mode == "rgb") 3 else 1
+  val roundsPerCycle = if (args.length > 4) args(4).toInt else 1
   val numImages = images.length
   val outDir = "output"
   new File(outDir).mkdirs()
@@ -50,7 +51,7 @@ object Main extends App {
 
   // 2. stream the pixels through the hardware
   val results = Seq.fill(numImages)(ArrayBuffer[Int]())
-  RawTester.test(new Top(width, height, channels, numImages)) { dut =>
+  RawTester.test(new Top(width, height, channels, numImages, roundsPerCycle)) { dut =>
     dut.io.key.poke(key.U(128.W))
     for (i <- 0 until numImages) dut.io.nonce(i).poke(nonces(i).U(128.W))
     dut.io.start.poke(true.B)
@@ -91,7 +92,7 @@ object Main extends App {
 
   // 4. Verilog for Vivado
   ChiselStage.emitSystemVerilogFile(
-    new Top(width, height, channels, numImages),
+    new Top(width, height, channels, numImages, roundsPerCycle),
     args = Array("--target-dir", "generated"),
     // cleaner Verilog: no random init blocks and no debug comments
     firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")

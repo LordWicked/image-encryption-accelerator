@@ -74,7 +74,7 @@ class AsconPermutationSpec extends AnyFlatSpec with ChiselScalatestTester {
   def peekState(port: Vec[UInt]): Seq[BigInt] =
     port.map(_.peek().litValue)
 
-  "constantAddition" should "XOR the round constant into x2 and nothing else" in {
+  "constantAddition" should s"XOR the round constant into x2 and nothing else" in {
     test(new RoundHarness((s, rc) => AsconPermutation.constantAddition(rc, s))) { dut =>
       for (i <- 0 until 12) {
         val expectedConst = ((15 - i) << 4) | i // independent of the AsconCons table
@@ -86,7 +86,8 @@ class AsconPermutationSpec extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 
-  "substitutionLayer" should "match the S-box table in every bit column" in {
+
+  "substitutionLayer" should s"match the S-box table in every bit column" in {
     test(new LayerHarness(AsconPermutation.substitutionLayer)) { dut =>
       // 32 passes: in each pass every column gets a different input value,
       // and over all passes every column sees all 32 values.
@@ -103,7 +104,8 @@ class AsconPermutationSpec extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 
-  "linearDiffusionLayer" should "spread a single bit to exactly three positions in its own word" in {
+
+  "linearDiffusionLayer" should s"spread a single bit to exactly three positions in its own word" in {
     test(new LayerHarness(AsconPermutation.linearDiffusionLayer)) { dut =>
       for (w <- 0 until 5; b <- 0 until 64) {
         val in = Seq.tabulate(5)(i => if (i == w) BigInt(0).setBit(b) else BigInt(0))
@@ -117,8 +119,9 @@ class AsconPermutationSpec extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 
+
   // Reference values from pyascon (NIST version), see AsconInitVectors in AsconInitSpec.scala
-  "compute" should "match the reference model for one round" in {
+  "compute" should s"match the reference model for one round" in {
     val roundIndex = 0
     val before = AsconInitVectors.loaded
     val after  = AsconInitVectors.afterRound0

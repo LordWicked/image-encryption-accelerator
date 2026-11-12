@@ -10,7 +10,8 @@ import scala.collection.mutable.ArrayBuffer
 import java.awt.Color
 
 class ImagePipelineSpec extends AnyFlatSpec with ChiselScalatestTester {
-  "PassThroughEngine" should "process a custom real image pixel by pixel" in {
+
+  "PassThroughEngine" should s"process a custom real image pixel by pixel" in {
     test(new PassthroughCore) { dut =>
       // 1. load custom image 64x64 or 128x128 for faster simulation time
 

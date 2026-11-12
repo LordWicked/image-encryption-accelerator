@@ -22,7 +22,8 @@ class RoundTrip extends Module {
 }
 
 class PackerUnpackerSpec extends AnyFlatSpec with ChiselScalatestTester {
-  "Packer and Unpacker" should "pass a round trip test of 16 bytes" in {
+
+  "Packer and Unpacker" should s"pass a round trip test of 16 bytes" in {
     test(new RoundTrip).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
 
       // setup initial states
@@ -56,4 +57,4 @@ class PackerUnpackerSpec extends AnyFlatSpec with ChiselScalatestTester {
       }
     }
   }
-}
+  }

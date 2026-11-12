@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 // one encryption lane: RGB pixels -> PixelFormatter -> Packer -> Ascon -> Unpacker -> bytes
-class ImageLane(numBlocks: Int, channels: Int) extends Module {
+class ImageLane(numBlocks: Int, channels: Int, roundsPerCycle: Int) extends Module {
   val io = IO(new Bundle {
     val start = Input(Bool())
     val key = Input(UInt(128.W))
@@ -18,7 +18,7 @@ class ImageLane(numBlocks: Int, channels: Int) extends Module {
   val formatter = Module(new PixelFormatter(channels))
 
   // the packers group the bytes into the blocks the Ascon core works on
-  val ascon = Module(new Ascon(numBlocks))
+  val ascon = Module(new Ascon(numBlocks, roundsPerCycle))
   val nBytes = ascon.io.pixels_in.bits.getWidth / 8
   val packer = Module(new Packer(nBytes))
   val unpacker = Module(new Unpacker(nBytes))
@@ -38,7 +38,7 @@ class ImageLane(numBlocks: Int, channels: Int) extends Module {
 // no UART yet, the images are streamed in simulation by Main
 // generated for one image format: width x height pixels of channels bytes
 // (1 = grayscale, 3 = RGB), the core itself only sees the number of blocks
-class Top(width: Int = 64, height: Int = 64, channels: Int = 1, numImages: Int = 1) extends Module {
+class Top(width: Int = 64, height: Int = 64, channels: Int = 1, numImages: Int = 1, roundsPerCycle: Int = 1) extends Module {
   require(width > 0 && height > 0, s"invalid image size ${width}x$height")
   require(channels == 1 || channels == 3, s"channels must be 1 (grayscale) or 3 (RGB), got $channels")
   require(numImages > 0, s"numImages must be at least 1, got $numImages")
@@ -60,7 +60,7 @@ class Top(width: Int = 64, height: Int = 64, channels: Int = 1, numImages: Int =
   })
 
   for (i <- 0 until numImages) {
-    val lane = Module(new ImageLane(numBlocks, channels))
+    val lane = Module(new ImageLane(numBlocks, channels, roundsPerCycle))
     lane.io.start := io.start
     lane.io.key := io.key
     lane.io.nonce := io.nonce(i)
