@@ -17,30 +17,38 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
     if (channels == 1) plain.map(b => (b << 16) | (b << 8) | b)
     else plain.grouped(3).map { case Seq(r, g, b) => (r << 16) | (g << 8) | b }.toSeq
 
-  // streams the pixels through the whole Top, returns ciphertext + tag
-  def encrypt(dut: Top, plain: Seq[Int], channels: Int): Seq[Int] = {
-    val pixels = toPixels(plain, channels)
+  // streams one image per lane through the whole Top, returns ciphertext + tag of each
+  // image i gets the base nonce + i, and its output is not taken before cycle stall(i)
+  def encryptAll(dut: Top, plains: Seq[Seq[Int]], channels: Int, stall: Seq[Int]): Seq[Seq[Int]] = {
+    val lanes = plains.indices
+    val pixels = plains.map(toPixels(_, channels))
     dut.io.key.poke(toCoreInput(keyBytes).U(128.W))
-    dut.io.nonce.poke(toCoreInput(nonceBytes).U(128.W))
+    for (i <- lanes) dut.io.nonce(i).poke((toCoreInput(nonceBytes) + i).U(128.W))
     dut.io.start.poke(true.B)
     dut.clock.step(1)
     dut.io.start.poke(false.B)
-    dut.io.out.ready.poke(true.B)
 
-    val result = ArrayBuffer[Int]()
-    var sent = 0
+    val results = plains.map(_ => ArrayBuffer[Int]())
+    val sent = Array.fill(plains.length)(0)
     var cycles = 0
-    while (result.length < plain.length + 16) {
-      dut.io.in.valid.poke((sent < pixels.length).B)
-      dut.io.in.bits.poke(if (sent < pixels.length) pixels(sent).U else 0.U)
-      if (sent < pixels.length && dut.io.in.ready.peek().litToBoolean) sent += 1
-      if (dut.io.out.valid.peek().litToBoolean) result += dut.io.out.bits.peek().litValue.toInt
+    while (lanes.exists(i => results(i).length < plains(i).length + 16)) {
+      for (i <- lanes) {
+        val ready = cycles >= stall(i)
+        dut.io.out(i).ready.poke(ready.B)
+        dut.io.in(i).valid.poke((sent(i) < pixels(i).length).B)
+        dut.io.in(i).bits.poke(if (sent(i) < pixels(i).length) pixels(i)(sent(i)).U else 0.U)
+        if (sent(i) < pixels(i).length && dut.io.in(i).ready.peek().litToBoolean) sent(i) += 1
+        if (ready && dut.io.out(i).valid.peek().litToBoolean) results(i) += dut.io.out(i).bits.peek().litValue.toInt
+      }
       dut.clock.step(1)
       cycles += 1
-      assert(cycles < 1000, s"timeout, got ${result.length} of ${plain.length + 16} bytes")
+      assert(cycles < 1000, s"timeout, got ${results.map(_.length)} bytes")
     }
-    result.toSeq
+    results.map(_.toSeq)
   }
+
+  def encrypt(dut: Top, plain: Seq[Int], channels: Int): Seq[Int] =
+    encryptAll(dut, Seq(plain), channels, stall = Seq(0)).head
 
   def hex(bytes: Seq[Int]): String = bytes.map(b => f"$b%02x").mkString
 
@@ -56,6 +64,13 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
       "96d53cd55b00b93a7a9e98c7e5603c99c56ea022f56c3ef96e9383c9b32636f393c8b22a45c4999e09a77833b5599ade" +
       "2fbaf7a37eb7d019ba6b79dd7f583d39")
   )
+  
+  // two 4x4 grayscale images and their ciphertext + tag from pyascon, with the nonces 00 .. 0f and that + 1
+  val twoImages = Seq(Seq.tabulate(16)(i => i), Seq.tabulate(16)(i => 255 - i))
+  val twoReferences = Seq(
+    "e770d289d2a44aee7cd0a48ece5274e3ea721f9a8fc4e556f2745972f5a78411",
+    "e3e7bc55fbe9e4c44cad03ecb996d27997c261a65f2b9a26d064bfa2ef2d8b2d"
+  ).map(_.grouped(2).map(Integer.parseInt(_, 16)).toSeq)
 
   for (r <- roundsPerCycleConfigs) {
     "Top" should s"generate Verilog (roundsPerCycle = $r)" in {
@@ -80,15 +95,23 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
     }
 
 
-    for ((width, height, channels, reference) <- references) {
-      it should s"encrypt a ${width}x$height image with $channels channel(s) like the reference (roundsPerCycle = $r)" in {
-        val plain = Seq.tabulate(width * height * channels)(_ % 256)
-        val expected = reference.grouped(2).map(Integer.parseInt(_, 16)).toSeq
+    it should s"encrypt two images at the same time like the reference (roundsPerCycle = $r)" in {
+      test(new Top(4, 4, 1, numImages = 2)) { dut =>
+        val results = encryptAll(dut, twoImages, 1, stall = Seq(0, 0))
+        assert(results == twoReferences, s"\n  got      ${results.map(hex)}\n  expected ${twoReferences.map(hex)}")
+      }
+    }
 
-        test(new Top(width, height, channels)) { dut =>
-          val result = encrypt(dut, plain, channels)
-          assert(result == expected, s"\n  got      ${hex(result)}\n  expected ${hex(expected)}")
-        }
+    it should s"keep the lanes independent when one output stops (roundsPerCycle = $r)" in {
+      test(new Top(4, 4, 1, numImages = 2)) { dut =>
+        assert(encryptAll(dut, twoImages, 1, stall = Seq(0, 100)) == twoReferences)
+      }
+    }
+
+    it should s"generate one lane for each image (roundsPerCycle = $r)" in {
+      for (numImages <- Seq(1, 2, 3)) {
+        val verilog = ChiselStage.emitSystemVerilog(new Top(8, 4, 1, numImages))
+        assert("ImageLane \\w+ \\(".r.findAllIn(verilog).length == numImages)
       }
     }
 
@@ -104,6 +127,7 @@ class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
       intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(30, 30, 1)) }
       intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(64, 64, 2)) }
       intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(0, 64, 1)) }
+      intercept[IllegalArgumentException] { ChiselStage.emitSystemVerilog(new Top(64, 64, 1, numImages = 0)) }
     }
   }
 }
