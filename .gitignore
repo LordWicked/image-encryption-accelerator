@@ -19,3 +19,11 @@ resultado_hardware.png
 # Generated Verilog and images (sbt run)
 generated/
 output/
+
+# Vivado batch runs
+.Xil/
+vivado*.jou
+vivado*.log
+vivado_pid*.str
+clockInfo.txt
+usage_statistics_webtalk.*
