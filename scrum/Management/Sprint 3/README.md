@@ -22,10 +22,4 @@ We've splitted the tasks accordingly, solved the problem of which type of ascon 
 
 <img width="1296" height="681" alt="image" src="../../../assets/after_3week.png" />
 
-### Burndown Chart for the sprint
 
-EMPTY
-
-### Gantt Chart
-
-EMPTY

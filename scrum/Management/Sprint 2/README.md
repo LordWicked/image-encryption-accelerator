@@ -21,10 +21,3 @@ We've changed the MVP to run images only in the FPGA since we had only one more 
 
 <img width="1296" height="681" alt="image" src="../../../assets/after_2week.png" />
 
-### Burndown Chart for the sprint
-
-EMPTY
-
-### Gantt Chart
-
-EMPTY

@@ -30,11 +30,10 @@ class Uart(gen: () => PassthroughCore) extends Module {
 
   val uartTx = Module(
     new UartTx(clockFreq / baudRate)
-  ) // Assume que tens o UartTx equivalente
+  )
   uartTx.io.in.valid := runner.io.out.valid
   uartTx.io.in.bits := runner.io.out.bits
   io.txd := uartTx.io.txd
 
-  // Sinaliza ao core.io.out que já consumimos o dado (o UartTx está sempre pronto para aceitar)
   runner.io.out.ready := uartTx.io.out.valid
 }
