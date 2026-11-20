@@ -1,4 +1,4 @@
-package engine
+package engine.algo
 
 import chisel3._
 import chisel3.util._
@@ -78,15 +78,19 @@ object AsconPermutation {
 
 import AsconState._
 
-class AsconRoundUnit (roundsPerCycle: Int) extends Module {
+class AsconRoundUnit(roundsPerCycle: Int) extends Module {
   val io = IO(new RoundIO)
-  io.stateReg_out := (0 until roundsPerCycle).foldLeft(io.stateReg_in) { (s, k) =>
-    AsconPermutation.compute(s, io.perm_counter_in + k.U)
+  io.stateReg_out := (0 until roundsPerCycle).foldLeft(io.stateReg_in) {
+    (s, k) =>
+      AsconPermutation.compute(s, io.perm_counter_in + k.U)
   }
 }
 
 class Ascon(numBlocks: Int = 1024, roundsPerCycle: Int = 1) extends Module {
-  require(Seq(1, 2, 4).contains(roundsPerCycle), "roundsPerCycle must divide 12 and 8")
+  require(
+    Seq(1, 2, 4).contains(roundsPerCycle),
+    "roundsPerCycle must divide 12 and 8"
+  )
   val lastStep = (12 - roundsPerCycle).U
 
   // 1 Phase
@@ -129,12 +133,11 @@ class Ascon(numBlocks: Int = 1024, roundsPerCycle: Int = 1) extends Module {
 
         keyReg := io.key
 
-        stateReg(1) := io.key(63, 0)		//Little endian
-        stateReg(2) := io.key(127, 64)		// --
+        stateReg(1) := io.key(63, 0) // Little endian
+        stateReg(2) := io.key(127, 64) // --
 
-
-        stateReg(3) := io.nonce(63, 0)		//Little endian
-        stateReg(4) := io.nonce(127, 64)	// --
+        stateReg(3) := io.nonce(63, 0) // Little endian
+        stateReg(4) := io.nonce(127, 64) // --
 
         state := sInit
         perm_counter := 0.U
@@ -196,7 +199,7 @@ class Ascon(numBlocks: Int = 1024, roundsPerCycle: Int = 1) extends Module {
       stateReg := next
       perm_counter := perm_counter + roundsPerCycle.U
       when(perm_counter === lastStep) {
-        stateReg(3) := next(3) ^ keyReg(63, 0) 		//tag = x3||x4 ^ key
+        stateReg(3) := next(3) ^ keyReg(63, 0) // tag = x3||x4 ^ key
         stateReg(4) := next(4) ^ keyReg(127, 64)
         state := sTag
       }
