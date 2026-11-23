@@ -1,4 +1,4 @@
-# Sprint 3
+# Sprint 4
 
 ## Dates
 
@@ -26,10 +26,3 @@ efficiency in the fpga and what we need to do after MVP
 
 <img width="1296" height="681" alt="image" src="../../../assets/after_4week.png" />
 
-### Burndown Chart for the sprint
-
-EMPTY
-
-### Gantt Chart
-
-EMPTY

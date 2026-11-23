@@ -1,5 +1,5 @@
 package engine
-
+import engine.algo.Ascon
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -9,7 +9,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 // With the max clock from vivado this gives the throughput. Results go to generated/cycles.csv
 class CyclesSpec extends AnyFlatSpec with ChiselScalatestTester {
   val blocks = 48 // a 16x16 RGB image
-  val lines = scala.collection.mutable.ArrayBuffer("part;roundsPerCycle;blocks;cycles;firstOut")
+  val lines = scala.collection.mutable.ArrayBuffer(
+    "part;roundsPerCycle;blocks;cycles;firstOut"
+  )
   val cycles = scala.collection.mutable.Map[(String, Int), Int]()
 
   for (k <- Seq(1, 2, 4)) {
@@ -17,10 +19,13 @@ class CyclesSpec extends AnyFlatSpec with ChiselScalatestTester {
       test(new Ascon(blocks, k)) { dut =>
         dut.clock.setTimeout(0)
         dut.io.start.poke(true.B); dut.clock.step(1); dut.io.start.poke(false.B)
-        dut.io.pixels_in.valid.poke(true.B); dut.io.enc_pixels_out.ready.poke(true.B)
+        dut.io.pixels_in.valid.poke(true.B);
+        dut.io.enc_pixels_out.ready.poke(true.B)
         var outs = 0; var n = 1; var first = -1
         while (outs < blocks + 1) { // blocks + tag
-          if (dut.io.enc_pixels_out.valid.peek().litToBoolean) { if (first < 0) first = n; outs += 1 }
+          if (dut.io.enc_pixels_out.valid.peek().litToBoolean) {
+            if (first < 0) first = n; outs += 1
+          }
           dut.clock.step(1); n += 1
           assert(n < 100000, "timeout")
         }
@@ -32,10 +37,13 @@ class CyclesSpec extends AnyFlatSpec with ChiselScalatestTester {
       test(new Top(16, 16, 3, 1, k)) { dut =>
         dut.clock.setTimeout(0)
         dut.io.start.poke(true.B); dut.clock.step(1); dut.io.start.poke(false.B)
-        dut.io.in(0).valid.poke(true.B); dut.io.in(0).bits.poke(0x123456.U); dut.io.out(0).ready.poke(true.B)
+        dut.io.in(0).valid.poke(true.B); dut.io.in(0).bits.poke(0x123456.U);
+        dut.io.out(0).ready.poke(true.B)
         var outs = 0; var n = 1; var first = -1
         while (outs < blocks * 16 + 16) {
-          if (dut.io.out(0).valid.peek().litToBoolean) { if (first < 0) first = n; outs += 1 }
+          if (dut.io.out(0).valid.peek().litToBoolean) {
+            if (first < 0) first = n; outs += 1
+          }
           dut.clock.step(1); n += 1
           assert(n < 100000, "timeout")
         }
@@ -46,11 +54,18 @@ class CyclesSpec extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   it should "need fewer core cycles with more rounds per cycle" in {
-    assert(cycles(("core", 1)) > cycles(("core", 2)) && cycles(("core", 2)) > cycles(("core", 4)))
+    assert(
+      cycles(("core", 1)) > cycles(("core", 2)) && cycles(("core", 2)) > cycles(
+        ("core", 4)
+      )
+    )
   }
 
   it should "write the results to generated/cycles.csv" in {
     new java.io.File("generated").mkdirs()
-    java.nio.file.Files.write(java.nio.file.Paths.get("generated/cycles.csv"), (lines.mkString("\n") + "\n").getBytes)
+    java.nio.file.Files.write(
+      java.nio.file.Paths.get("generated/cycles.csv"),
+      (lines.mkString("\n") + "\n").getBytes
+    )
   }
 }
