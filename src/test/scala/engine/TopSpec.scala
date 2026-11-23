@@ -5,10 +5,11 @@ import chiseltest._
 import circt.stage.ChiselStage
 import org.scalatest.flatspec.AnyFlatSpec
 import scala.collection.mutable.ArrayBuffer
-import engine.ascon_test.AsconDataVectors._
-import engine.ascon_test.AsconInitVectors._
-import engine.ascon_test.AsconTagVectors._
+
 class TopSpec extends AnyFlatSpec with ChiselScalatestTester {
+  import AsconInitVectors._
+  import AsconDataVectors._
+  import AsconTagVectors._
 
   val roundsPerCycleConfigs = Seq(1, 2, 4)
 

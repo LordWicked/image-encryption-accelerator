@@ -2,7 +2,6 @@ package engine
 
 import chisel3._
 import chisel3.util._
-import engine.algo.Ascon
 
 // one encryption lane: RGB pixels -> PixelFormatter -> Packer -> Ascon -> Unpacker -> bytes
 class ImageLane(numBlocks: Int, channels: Int, roundsPerCycle: Int)

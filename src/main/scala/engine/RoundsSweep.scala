@@ -1,5 +1,4 @@
 package engine
-import engine.algo.Ascon
 import _root_.circt.stage.ChiselStage
 
 // verilog for the rounds per cycle evaluation, sbt "runMain engine.RoundsSweep"

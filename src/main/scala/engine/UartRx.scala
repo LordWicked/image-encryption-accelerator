@@ -1,4 +1,4 @@
-package engine.uart
+package engine
 
 import chisel3.IO
 import chisel3.Bundle

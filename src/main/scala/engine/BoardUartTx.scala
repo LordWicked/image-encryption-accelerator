@@ -1,4 +1,4 @@
-package engine.board
+package engine
 
 import chisel3._
 import chisel3.util._

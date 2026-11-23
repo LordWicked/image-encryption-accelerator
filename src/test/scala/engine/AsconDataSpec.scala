@@ -1,9 +1,8 @@
-package engine.ascon_test
+package engine
 
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
-import engine.algo.Ascon
 
 /** Reference values for the data phase, from the official Ascon reference
   * (pyascon, NIST version). Key = nonce = bytes 00..0f (as in
