@@ -3,8 +3,13 @@ package engine
 import chisel3._
 import chisel3.util._
 import engine.algo.Ascon
-
-// one encryption lane: RGB pixels -> PixelFormatter -> Packer -> Ascon -> Unpacker -> bytes
+import Config._
+/*
+This class performs the ascon algorithm encryption to a whole image in parallel.
+First it receives 24 bits at a time to perform grayscale operation dependent on the generator
+and then it waits using the packer for batches of 128 bits and execute the multiple ascon rounds inside
+a clock cycle.
+ */
 class ImageLane(numBlocks: Int, channels: Int, roundsPerCycle: Int)
     extends Module {
   val io = IO(new Bundle {
@@ -12,7 +17,6 @@ class ImageLane(numBlocks: Int, channels: Int, roundsPerCycle: Int)
     val key = Input(UInt(128.W))
     val nonce = Input(UInt(128.W))
 
-    // RGB pixels in, ciphertext bytes out, followed by the 16 byte tag
     val in = Flipped(Decoupled(UInt(24.W)))
     val out = Decoupled(UInt(8.W))
   })
@@ -36,10 +40,11 @@ class ImageLane(numBlocks: Int, channels: Int, roundsPerCycle: Int)
   io.out <> unpacker.io.out
 }
 
-// top level: numImages lanes side by side, each one encrypts its own image at the same time
-// no UART yet, the images are streamed in simulation by Main
-// generated for one image format: width x height pixels of channels bytes
-// (1 = grayscale, 3 = RGB), the core itself only sees the number of blocks
+/*
+  This class is responsible for executing multiple images encryption in "parallel".
+  First it checks every input generator and then executes the Image lane operation for every image given
+  in the input.
+ */
 class Top(
     width: Int = 64,
     height: Int = 64,
@@ -54,25 +59,29 @@ class Top(
   )
   require(numImages > 0, s"numImages must be at least 1, got $numImages")
 
-  // the core has no padding yet, so the image must fill whole 16 byte blocks
   val imageBytes = width * height * channels
   require(
-    imageBytes % 16 == 0,
+    imageBytes % BlockSize == 0,
     s"a ${width}x$height image with $channels channel(s) is $imageBytes bytes, not a multiple of 16"
   )
-  val numBlocks = imageBytes / 16
+
+  val numBlocks = imageBytes / BlockSize
 
   val io = IO(new Bundle {
-    // one pulse starts a new encryption of all images with this key
+
     val start = Input(Bool())
     val key = Input(UInt(128.W))
 
-    // one nonce and one stream for each image, a nonce must never repeat with the same key
     val nonce = Input(Vec(numImages, UInt(128.W)))
     val in = Vec(numImages, Flipped(Decoupled(UInt(24.W))))
     val out = Vec(numImages, Decoupled(UInt(8.W)))
   })
 
+  /*
+    Loop Unrolling, this can be done in parallel in one cycle since the
+    blocks are independent due to how the ascon algorithm is performed (only takes 128 bits at a time)
+    to do an encryption.
+   */
   for (i <- 0 until numImages) {
     val lane = Module(new ImageLane(numBlocks, channels, roundsPerCycle))
     lane.io.start := io.start
