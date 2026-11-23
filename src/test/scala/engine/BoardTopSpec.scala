@@ -4,7 +4,6 @@ import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 import scala.collection.mutable.ArrayBuffer
-import engine.board.BoardTop
 
 class BoardTopSpec extends AnyFlatSpec with ChiselScalatestTester {
   // fast uart so the simulation stays short. 10 cycles per bit into the board, it sends 1% faster

@@ -1,9 +1,8 @@
-package engine.ascon_test
+package engine
 
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
-import engine.algo.AsconPermutation
 // ---------------------------------------------------------------------------
 // Test harnesses: the round functions are plain Scala functions that build
 // hardware, so they need a small Module around them to be simulated.

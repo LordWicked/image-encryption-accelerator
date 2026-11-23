@@ -1,9 +1,7 @@
-package engine.uart
+package engine
 
 import chisel3._
 import chisel3.util._
-import engine.uart.UartReceiverWrapper
-import engine.{PassthroughCore, StreamIO}
 class Uart(gen: () => PassthroughCore) extends Module {
   val io = IO(new Bundle {
     val rxd = Input(Bool())

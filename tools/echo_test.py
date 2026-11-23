@@ -7,7 +7,7 @@
 #   python tools/echo_test.py --port COM5 --baud 115200
 import argparse, os, sys, time, threading
 import serial
-from tools.board_port import find_port
+from board_port import find_port
 
 p = argparse.ArgumentParser()
 p.add_argument("--port", default=None, help="serial port of the board, found automatically if not given")

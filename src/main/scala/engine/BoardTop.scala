@@ -1,9 +1,8 @@
-package engine.board
+package engine
 
 import chisel3._
 import chisel3.util._
 import _root_.circt.stage.ChiselStage
-import engine.uart.UartRx
 
 // Nexys A7 board, first step: UART loopback. Every byte that arrives is sent back,
 // to test the link to the PC before the encryption is connected

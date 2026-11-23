@@ -1,8 +1,7 @@
-package engine.uart
+package engine
 
 import chisel3._
 import chisel3.util._
-import engine.StreamIO
 class UartTx(cyclesPerBit: Int) extends Module {
 
   val io = IO(new UartTxBundle)
