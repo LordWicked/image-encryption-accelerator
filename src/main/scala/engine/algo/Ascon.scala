@@ -1,4 +1,4 @@
-package engine
+package engine.algo
 
 import chisel3._
 import chisel3.util._
@@ -114,8 +114,6 @@ class Ascon(numBlocks: Int = 1024, roundsPerCycle: Int = 1) extends Module {
   io.pixels_in.ready := false.B
   io.enc_pixels_out.valid := false.B
   io.enc_pixels_out.bits := 0.U
-
-  // TODO Mention missed deletion of duplicates in Scrum story
 
   io.dbg_state := stateReg
 
@@ -233,7 +231,6 @@ class AsconIO() extends Bundle {
   val key = Input(UInt(128.W))
   val nonce = Input(UInt(128.W))
 
-  // Debug State Output TODO keep as generator parameter DEBUG?
   val dbg_state = Output(Vec(5, UInt(64.W)))
 
   // 8 pixels

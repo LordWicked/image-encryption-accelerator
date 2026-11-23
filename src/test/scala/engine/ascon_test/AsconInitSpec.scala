@@ -1,8 +1,9 @@
-package engine
+package engine.ascon_test
 
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
+import engine.algo.Ascon
 
 /** Expected values from the official Ascon reference (pyascon, NIST SP 800-232
   * version). Key = nonce = bytes 00 01 02 ... 0f, the same inputs as NIST KAT

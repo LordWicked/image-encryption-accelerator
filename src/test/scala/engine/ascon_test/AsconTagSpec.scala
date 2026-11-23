@@ -1,8 +1,9 @@
-package engine
+package engine.ascon_test
 
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
+import engine.algo.Ascon
 
 /** Reference tag for key = nonce = bytes 00..0f, empty associated data and
   * plaintext bytes 00..1f (the same inputs as AsconDataVectors). From the
