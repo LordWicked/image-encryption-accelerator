@@ -27,3 +27,6 @@ vivado*.log
 vivado_pid*.str
 clockInfo.txt
 usage_statistics_webtalk.*
+
+# Python
+__pycache__/
