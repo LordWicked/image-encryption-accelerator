@@ -1,0 +1,8 @@
+[1] area: 1194 LUTs per lane, fits ~43 lanes at 80% and ~53 at 100% of 63400 LUTs
+[2] throughput: UART 115200 baud = 11.5 KB/s, UART 1 Mbaud = 99.2 KB/s, UART 2 Mbaud = 196.8 KB/s, UART 3 Mbaud = 292.6 KB/s; at 100 MHz: Top = 90 MB/s, Ascon core alone = 167 MB/s. Top is ~307x faster than the best UART
+[3] time per 256x256 RGB image: 115200 baud = 17.05 s, 1000000 baud = 1.98 s, 2000000 baud = 1.00 s, 3000000 baud = 0.67 s
+[4] at 2 Mbaud: 1 images = 1.00 s, 2 images = 1.98 s, 4 images = 3.98 s, 8 images = 7.88 s, 16 images = 15.75 s; fit 0.983 s per image
+[5] at 2 Mbaud: 64x64 = 78 ms, 128x128 = 262 ms, 256x256 = 999 ms
+[6] 1 round(s)/cycle: 1155 LUTs, slack 3.301 ns -> fmax 149 MHz, core 9.6 cycles/block = 250 MB/s, Top 17.8 cycles/block = 134 MB/s
+[6] 2 round(s)/cycle: 1753 LUTs, slack 1.875 ns -> fmax 123 MHz, core 5.3 cycles/block = 371 MB/s, Top 17.7 cycles/block = 111 MB/s
+[6] 4 round(s)/cycle: 3338 LUTs, slack -7.227 ns -> fmax 58 MHz, core 3.2 cycles/block = 291 MB/s, Top 17.7 cycles/block = 52 MB/s

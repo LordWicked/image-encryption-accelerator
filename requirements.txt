@@ -2,3 +2,4 @@ pyserial
 pillow
 opencv-python
 numpy
+matplotlib
