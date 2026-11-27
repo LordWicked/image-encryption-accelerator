@@ -1,49 +1,110 @@
-# image-encryption-accelerator
-Group project implementing an image encryption/decryption accelerator using hardware generators written in Chisel.
-The image is read, encrypted using Ascon-AEAD128 and saved.
-The target is an FPGA.
+# Image Encryption Accelerator
 
-## Byte order
+**Ascon-AEAD128 image encryption in hardware, written as Chisel generators and running on a Digilent
+Nexys A7-100T FPGA.**
 
-All multi-byte values use little-endian byte order, as specified for Ascon-AEAD128
-(NIST SP 800-232): byte 0 is in bits 7..0. In Chisel, this is what `Vec(bytes).asUInt`
-produces; in Python, `int.from_bytes(b, "little")`. The Ascon core contains no
-byte-swapping logic.
+The PC sends an image (or a live camera feed) over USB. The FPGA encrypts the pixels on the fly while
+they stream through it and sends back the ciphertext with a 128-bit authentication tag. The PC decrypts
+and verifies the result with the official Ascon reference implementation.
 
-| Value | Width | Format |
-|---|---|---|
-| Key, nonce | 128 bit | 16 bytes as one little-endian integer |
-| Pixel beat | 64 bit | 8 pixels, pixel 0 in bits 7..0 |
-| Ciphertext beat | 64 bit | same as pixel beat |
-| Tag | 2 × 64 bit | beat 1 = tag bytes 0..7, beat 2 = tag bytes 8..15 |
+![Live video through the FPGA: live camera, frame sent, encrypted by the FPGA, decrypted on the PC](docs/images/video_demo.png)
 
-**Stream order:** pixels row by row, top-left pixel first. Two beats form one
-128-bit block: beat 1 goes into state word x0, beat 2 into x1. After the last
-block, the core outputs the two tag beats.
+*Live 64x64 video at ~20 fps. From left to right: the camera right now, the frame that went to the FPGA,
+what the FPGA sent back, and that frame decrypted on the PC (shown only because the tag matched). The
+last three show the same frame; it is a little behind the live camera because of the trip through the board.*
 
-### Example
+> Course project for *Hardware Chip Design* (2026). This README is the project report: it explains what we
+> built, why we built it this way, how to run it and what we measured.
 
-Key = nonce = bytes `00 01 02 … 0f`:
+**Just want to see it run?** Go to [8.1 Quick start](#81-quick-start-about-5-minutes).
 
-    io.key = 0x0f0e0d0c0b0a09080706050403020100
-    x1     = 0x0706050403020100   (key bytes 0..7)
-    x2     = 0x0f0e0d0c0b0a0908   (key bytes 8..15)
+---
 
-Pixel bytes `00 01 … 0f` as one block:
+## Contents
 
-    beat 1 = 0x0706050403020100   (pixels 0..7)
-    beat 2 = 0x0f0e0d0c0b0a0908   (pixels 8..15)
+1. [Summary](#1-summary)
+2. [The problem](#2-the-problem)
+3. [Goals and what we delivered](#3-goals-and-what-we-delivered)
+4. [Background: Ascon-AEAD128 in one page](#4-background-ascon-aead128-in-one-page)
+5. [Design decisions](#5-design-decisions)
+6. [Architecture](#6-architecture)
+7. [Verification](#7-verification)
+8. [How to run it](#8-how-to-run-it)
+9. [Results and evaluation](#9-results-and-evaluation)
+10. [How we developed it](#10-how-we-developed-it)
+11. [Limitations and future work](#11-limitations-and-future-work)
+12. [Repository layout](#12-repository-layout)
+13. [Appendix: byte order](#13-appendix-byte-order)
+14. [Team](#14-team)
+15. [References](#15-references)
 
-Tag `a28657f6e82fe53d08b09eff9330bd2b` (for plaintext bytes `00 … 1f`):
+---
 
-    beat 1 = 0x3de52fe8f65786a2
-    beat 2 = 0x2bbd3093ff9eb008
+## 1. Summary
 
-### Converting in Python
+| | |
+|---|---|
+| Algorithm | Ascon-AEAD128 (NIST SP 800-232): 128-bit key, nonce and tag |
+| Hardware | Chisel 6 generators, SystemVerilog generated with CIRCT, Vivado 2023.2 |
+| Board | Digilent Nexys A7-100T, Artix-7 `xc7a100tcsg324-1`, 100 MHz |
+| Image formats | any width x height, RGB or grayscale, chosen when the hardware is generated |
+| Area | ~1150 LUTs per encryption lane, **about 2% of the FPGA**; no block RAM |
+| Timing | met at 100 MHz with 2.5 ns of slack on the board design |
+| Speed of the logic | 90 MB/s per lane at 100 MHz |
+| Speed on the board | 256x256 RGB image in **0.67 s**; live 64x64 RGB video at **~20 fps** |
+| Bottleneck | the USB-UART link, ~300x slower than the encryption logic |
+| Verification | chiseltest against `pyascon` test vectors; every board result checked byte for byte |
 
-    key_int = int.from_bytes(key_bytes, "little")
-    beats   = [int.from_bytes(block[i:i + 8], "little") for i in (0, 8)]
-## Running the pipeline
+## 2. The problem
+
+Images carry private information: medical scans, camera feeds, documents. Encrypting them is not as
+simple as it looks. With a naive block cipher mode (ECB), identical blocks of pixels encrypt to
+identical ciphertext, so the outline of the picture stays visible in the "encrypted" image. Encryption
+also costs time and energy, which matters for small devices such as cameras and sensors that send images
+all day.
+
+We wanted an accelerator that:
+
+- encrypts an image while it streams through, without storing it;
+- leaves **no visible structure** in the encrypted image;
+- also **authenticates** it, so any change on the way is detected;
+- is small enough for a cheap FPGA and can be reshaped (image size, colour, parallelism) without
+  rewriting the hardware.
+
+## 3. Goals and what we delivered
+
+The plan at the start of the course (see `docs/scrum.md`) and where we ended:
+
+| Planned | Status |
+|---|---|
+| Ascon permutation and encryption core in Chisel | done, matches the reference |
+| Stream a 128x128 grayscale image through the core in simulation (MVP) | done, demo on 2026-10-27 |
+| Software decryption recovers the image exactly | done |
+| Colour images | done: RGB and grayscale, any size, as generator parameters |
+| Several images at once | done: one independent lane per image |
+| Load the image over UART on the Nexys A7 | done, up to 3 Mbaud |
+| Rounds-per-cycle parameter, synthesis results per setting | done: 1, 2 and 4 rounds per cycle evaluated |
+| Decryption on the FPGA | not done, the PC decrypts (see [future work](#11-limitations-and-future-work)) |
+| *Extra:* live camera video through the FPGA | done, ~20 fps |
+| *Extra:* progress bar and image counters on the board | done |
+
+## 4. Background: Ascon-AEAD128 in one page
+
+_Written in a later pull request._
+
+## 5. Design decisions
+
+_Written in a later pull request._
+
+## 6. Architecture
+
+_Written in a later pull request._
+
+## 7. Verification
+
+_Written in a later pull request._
+
+## 8. How to run it
 
 ```
 sbt run                                 # uses assets/128x128-pixel-art.jpg, 256x256 RGB
@@ -73,3 +134,71 @@ sides a multiple of 4 works.
 Results in `output/`: `original.png`, `image.bin` (the bytes that were encrypted),
 `encrypted.png`, `encrypted.bin` and `tag.bin`. With several images the names end
 in `_0`, `_1`, ...
+
+## 9. Results and evaluation
+
+_Written in a later pull request._
+
+## 10. How we developed it
+
+_Written in a later pull request._
+
+## 11. Limitations and future work
+
+_Written in a later pull request._
+
+## 12. Repository layout
+
+```
+src/main/scala/engine/   Chisel hardware: Ascon, Top, PixelFormatter, Packer, UART, BoardTop
+                         and the Scala programs (Main: simulation pipeline, BoardMain, RoundsSweep, LanesSweep)
+src/test/scala/engine/   chiseltest specs, checked against pyascon values
+fpga/                    nexys_a7.xdc (pins), build.tcl, program.tcl, ooc.tcl (Vivado in batch mode)
+bitstreams/              ready bitstreams for the board (images and video)
+tools/                   PC side in Python: program, send_images, decrypt, video, bench, ascon.py (pyascon)
+evaluation/              measured data (data/), the graphs (graphs/) and the scripts that draw them
+docs/                    Ascon specification, project idea, Scrum plan, images for this README
+scrum/                   sprint reviews and retrospectives
+assets/                  test images
+generated/, output/      written by the tools, not in git
+```
+
+## 13. Appendix: byte order
+
+All multi-byte values are little-endian, as in Ascon-AEAD128 (SP 800-232): byte 0 is in bits 7..0. In
+Chisel that is what `Vec(bytes).asUInt` gives; in Python, `int.from_bytes(b, "little")`. The core has no
+byte-swapping logic.
+
+| Value | Width | Format |
+|---|---|---|
+| Key, nonce | 128 bit | 16 bytes as one little-endian integer |
+| Data block | 128 bit | 16 bytes; bytes 0..7 go into `x0`, bytes 8..15 into `x1` |
+| Tag | 128 bit | `x3` (bytes 0..7) and `x4` (bytes 8..15) after finalisation, XORed with the key |
+
+**Stream order:** pixels row by row, top-left first; for RGB, R then G then B.
+
+**Example.** Key = nonce = bytes `00 01 .. 0f`:
+
+```
+io.key = 0x0f0e0d0c0b0a09080706050403020100
+x1     = 0x0706050403020100   (key bytes 0..7)
+x2     = 0x0f0e0d0c0b0a0908   (key bytes 8..15)
+```
+
+For the plaintext bytes `00 .. 1f` the tag is `a28657f6e82fe53d08b09eff9330bd2b`.
+
+**In Python:**
+
+```python
+key_int = int.from_bytes(key_bytes, "little")
+blocks  = [int.from_bytes(data[i:i + 16], "little") for i in range(0, len(data), 16)]
+```
+
+## 14. Team
+
+_Written in a later pull request._
+
+## 15. References
+
+_Written in a later pull request._
+
