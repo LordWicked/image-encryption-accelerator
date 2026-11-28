@@ -69,7 +69,7 @@ fig.suptitle("FPGA performance is more than throughput: 1 round per cycle wins a
 fig.text(0.01, 0.925, "Top 256x256 RGB on the Artix-7 100T. Area, clock and power from Vivado place & route, "
          "cycles from simulation. Dark bar = the version on the board", fontsize=9, color=INK2)
 fig.tight_layout(rect=(0, 0, 1, 0.91))
-fig.savefig("graphs/7_fpga_performance.png", dpi=160); plt.close(fig); print("wrote 7_fpga_performance.png")
+fig.savefig("graphs/7_fpga_performance.svg", dpi=160); plt.close(fig); print("wrote 7_fpga_performance.svg")
 
 # ---------- where the time of one image goes on the board ----------
 board = [r for r in csv.reader(open("data/board.csv"), delimiter=";") if r[7] == "True"]
@@ -98,7 +98,7 @@ ax.text(0, 1.03, f"2 Mbaud, 100 MHz, measured {t_img:.2f} s per image. Whole boa
         f"({p_static:.3f} W static + {p_dyn:.3f} W dynamic, Vivado estimate) = {p_total * t_img:.2f} J per image",
         transform=ax.transAxes, fontsize=9, color=INK2, va="bottom")
 fig.tight_layout()
-fig.savefig("graphs/8_time_breakdown.png", dpi=160); plt.close(fig); print("wrote 8_time_breakdown.png")
+fig.savefig("graphs/8_time_breakdown.svg", dpi=160); plt.close(fig); print("wrote 8_time_breakdown.svg")
 
 lines = [f"[7] {r['k']} round(s)/cycle: {r['lut']:.0f} LUTs, {r['ff']:.0f} FFs, fmax {r['fmax']:.0f} MHz, Top {r['mbs']:.0f} MB/s at fmax, "
          f"latency {r['lat']:.0f} ns, dynamic {r['dyn']:.0f} mW at 100 MHz, "

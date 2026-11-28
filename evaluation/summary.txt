@@ -6,3 +6,10 @@
 [6] 1 round(s)/cycle: 1155 LUTs, slack 3.301 ns -> fmax 149 MHz, core 9.6 cycles/block = 250 MB/s, Top 17.8 cycles/block = 134 MB/s
 [6] 2 round(s)/cycle: 1753 LUTs, slack 1.875 ns -> fmax 123 MHz, core 5.3 cycles/block = 371 MB/s, Top 17.7 cycles/block = 111 MB/s
 [6] 4 round(s)/cycle: 3338 LUTs, slack -7.227 ns -> fmax 58 MHz, core 3.2 cycles/block = 291 MB/s, Top 17.7 cycles/block = 52 MB/s
+[7] 1 round(s)/cycle: 1155 LUTs, 741 FFs, fmax 149 MHz, Top 134 MB/s at fmax, latency 121 ns, dynamic 36 mW at 100 MHz, 0.401 nJ/byte, 116 MB/s per 1000 LUTs
+[7] 2 round(s)/cycle: 1753 LUTs, 743 FFs, fmax 123 MHz, Top 111 MB/s at fmax, latency 146 ns, dynamic 97 mW at 100 MHz, 1.074 nJ/byte, 63 MB/s per 1000 LUTs
+[7] 4 round(s)/cycle: 3338 LUTs, 740 FFs, fmax 58 MHz, Top 52 MB/s at fmax, latency 310 ns, dynamic 646 mW at 100 MHz, does not fit 100 MHz, 16 MB/s per 1000 LUTs
+[8] one 256x256 image at 2 Mbaud: 0.999 s total, encryption 2.19 ms (0.22%), first byte after 180 ns; board power 0.111 W (0.097 static + 0.014 dynamic), 0.11 J per image
+[9] core alone, 1 round(s)/cycle: 1052 LUTs, 9.6 cycles/block, fmax 149 MHz (slack 3.309 ns), 250 MB/s per core, 238 MB/s per 1000 LUTs, 0.185 nJ/byte, 48 cores in 80% of the LUTs = 12.0 GB/s
+[9] core alone, 2 round(s)/cycle: 1681 LUTs, 5.3 cycles/block, fmax 131 MHz (slack 2.392 ns), 396 MB/s per core, 235 MB/s per 1000 LUTs, 0.305 nJ/byte, 30 cores in 80% of the LUTs = 11.9 GB/s
+[9] core alone, 4 round(s)/cycle: 3265 LUTs, 3.2 cycles/block, fmax 60 MHz (slack -6.642 ns), 302 MB/s per core, 92 MB/s per 1000 LUTs, 1.271 nJ/byte, 15 cores in 80% of the LUTs = 4.5 GB/s

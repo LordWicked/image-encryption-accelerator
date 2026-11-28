@@ -69,7 +69,7 @@ fig.text(0.01, 0.9, "Core only (no byte interface), Artix-7 100T, Vivado place &
          "The total assumes the data could reach every core, which the UART can not do",
          fontsize=9, color=INK2)
 fig.tight_layout(rect=(0, 0, 1, 0.87))
-fig.savefig("graphs/9_core_alone.png", dpi=160); plt.close(fig); print("wrote 9_core_alone.png")
+fig.savefig("graphs/9_core_alone.svg", dpi=160); plt.close(fig); print("wrote 9_core_alone.svg")
 
 lines = [f"[9] core alone, {r['k']} round(s)/cycle: {r['lut']:.0f} LUTs, {r['cpb']:.1f} cycles/block, fmax {r['fmax']:.0f} MHz "
          f"(slack {r['wns']:.3f} ns), {r['mbs']:.0f} MB/s per core, {r['eff']:.0f} MB/s per 1000 LUTs, "
