@@ -81,7 +81,7 @@ ax.set_xlabel("parallel encryption lanes (one image each)"); ax.set_ylabel("LUTs
 ax.legend(loc="center right")
 ax.set_title("Area grows linearly with the number of lanes", pad=22)
 subtitle(ax, "Top 256x256 RGB on the Artix-7 100T. The image is streamed, so a lane costs the same at any resolution")
-save(fig, "1_area_vs_lanes.png")
+save(fig, "1_area_vs_lanes.svg")
 summary.append(f"[1] area: {a:.0f} LUTs per lane, fits ~{n_80:.0f} lanes at 80% and ~{n_full:.0f} at 100% of {TOTAL_LUT} LUTs")
 
 # ---------- rounds per cycle: synthesis + simulation ----------
@@ -127,7 +127,7 @@ ax.legend(handles=[Patch(color=ORANGE, label="measured on the Nexys A7 (USB-UART
 ratio = top100 / max(v for _, v in uart)
 ax.set_title("The UART is the bottleneck, not Ascon", pad=22)
 subtitle(ax, f"Even the fastest UART is ~{ratio:.0f}x slower than the encryption circuit")
-save(fig, "2_bottleneck.png")
+save(fig, "2_bottleneck.svg")
 summary.append("[2] throughput: " + ", ".join(f"{n} = {v * 1000:.1f} KB/s" for n, v in uart) +
                f"; at 100 MHz: Top = {top100:.0f} MB/s, Ascon core alone = {core100:.0f} MB/s."
                f" Top is ~{ratio:.0f}x faster than the best UART")
@@ -151,7 +151,7 @@ ax.set_xlabel("baud rate, Mbaud (log scale)"); ax.set_ylabel("seconds per 256x25
 ax.legend()
 ax.set_title("Faster UART = faster images, almost exactly as predicted", pad=22)
 subtitle(ax, "Round trip PC -> FPGA -> PC; sending and receiving happen at the same time")
-save(fig, "3_time_vs_baud.png")
+save(fig, "3_time_vs_baud.svg")
 summary.append("[3] time per 256x256 RGB image: " + ", ".join(f"{b_} baud = {t:.2f} s" for b_, t in pts))
 
 # ---------- 4. time vs number of images ----------
@@ -171,7 +171,7 @@ ax.set_xlabel("images sent in one go"); ax.set_ylabel("seconds")
 ax.legend(loc="upper left")
 ax.set_title("Many images: time grows linearly", pad=22)
 subtitle(ax, "256x256 RGB at 2 Mbaud, every result checked against the official Ascon (pyascon)")
-save(fig, "4_time_vs_images.png")
+save(fig, "4_time_vs_images.svg")
 summary.append("[4] at 2 Mbaud: " + ", ".join(f"{n} images = {t:.2f} s" for n, t in pts) + f"; fit {a4:.3f} s per image")
 
 # ---------- 5. time vs resolution ----------
@@ -188,7 +188,7 @@ ax.grid(axis="x", visible=False)
 ax.set_xlabel("image resolution (RGB)"); ax.set_ylabel("seconds per image")
 ax.set_title("Time follows the number of pixels", pad=22)
 subtitle(ax, "2 Mbaud, one image, measured on the board. 4x the pixels = 4x the time")
-save(fig, "5_time_vs_resolution.png")
+save(fig, "5_time_vs_resolution.svg")
 summary.append("[5] at 2 Mbaud: " + ", ".join(f"{w}x{w} = {t * 1000:.0f} ms" for w, t in pts))
 
 # ---------- 6. rounds per cycle ----------
@@ -222,7 +222,7 @@ fig.suptitle("More rounds per cycle: the core gets faster, but the circuit gets 
 fig.text(0.01, 0.86, "Top 256x256 RGB, Vivado place & route + simulated cycles. 4 rounds/cycle fails timing at 100 MHz (slack -4.6 ns).\n"
          "The whole Top moves 1 byte per cycle, so it never gains: only the slower clock is left", fontsize=9, color=INK2)
 fig.tight_layout(rect=(0, 0, 1, 0.84))
-fig.savefig("graphs/6_rounds_per_cycle.png", dpi=160); plt.close(fig); print("wrote 6_rounds_per_cycle.png")
+fig.savefig("graphs/6_rounds_per_cycle.svg", dpi=160); plt.close(fig); print("wrote 6_rounds_per_cycle.svg")
 for r in rounds:
     summary.append(f"[6] {r['k']} round(s)/cycle: {r['lut']} LUTs, slack {r['wns']:.3f} ns -> fmax {r['fmax']:.0f} MHz, "
                    f"core {r['core_cpb']:.1f} cycles/block = {r['core']:.0f} MB/s, Top {r['top_cpb']:.1f} cycles/block = {r['top']:.0f} MB/s")
